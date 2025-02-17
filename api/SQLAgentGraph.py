@@ -52,7 +52,7 @@ if __name__ == "__main__":
     img = Image.open(BytesIO(sql_agent_graph.get_graph().draw_mermaid_png()))
     img.save("text_sql_graph.png")
 
-    test_question = "How many employees are there?"
+    test_question = "Which country's customers spent the most, list 5 with amount spent?"  # "How many employees are there?"
 
     for step in sql_agent_graph.stream(
         {"question": test_question}, stream_mode="updates"

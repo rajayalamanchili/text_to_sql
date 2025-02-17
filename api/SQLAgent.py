@@ -23,9 +23,64 @@ class SQLAgent:
 Given the question and database schema, identify the relevant tables and columns. 
 If the question is not relevant to the database or if there is not enough information to answer the question, set is_relevant to false.
 
+DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database. if question is related to DML statement, set is_dml to true.
+
+Schema of the database with sample rows and column descriptions:
+#
+CREATE TABLE movies (
+        movie_id INTEGER NOT NULL, 
+        movie_title TEXT, 
+        movie_release_year INTEGER, 
+        movie_url TEXT, 
+        movie_title_language TEXT, 
+        movie_popularity INTEGER, 
+        movie_image_url TEXT, 
+        director_id TEXT, 
+        director_name TEXT, 
+        director_url TEXT, 
+        PRIMARY KEY (movie_id)
+)
+
+/*
+3 rows from movies table:
+movie_id        movie_title     movie_release_year      movie_url       movie_title_language    movie_popularity        movie_image_url director_id     director_namedirector_url
+1       La Antena       2007    http://mubi.com/films/la-antena en      105     https://images.mubicdn.net/images/film/1/cache-7927-1581389497/image-w1280.jpg  131  Esteban Sapir    http://mubi.com/cast/esteban-sapir
+2       Elementary Particles    2006    http://mubi.com/films/elementary-particles      en      23      https://images.mubicdn.net/images/film/2/cache-512179-1581389841/image-w1280.jpg      73      Oskar Roehler   http://mubi.com/cast/oskar-roehler
+3       It's Winter     2006    http://mubi.com/films/its-winter        en      21      https://images.mubicdn.net/images/film/3/cache-7929-1481539519/image-w1280.jpg82      Rafi Pitts      http://mubi.com/cast/rafi-pitts
+*/
+
+CREATE TABLE ratings (
+        movie_id INTEGER, 
+        rating_id INTEGER, 
+        rating_url TEXT, 
+        rating_score INTEGER, 
+        rating_timestamp_utc TEXT, 
+        critic TEXT, 
+        critic_likes INTEGER, 
+        critic_comments INTEGER, 
+        user_id INTEGER, 
+        user_trialist INTEGER, 
+        user_subscriber INTEGER, 
+        user_eligible_for_trial INTEGER, 
+        user_has_payment_method INTEGER, 
+        FOREIGN KEY(movie_id) REFERENCES movies (movie_id), 
+        FOREIGN KEY(user_id) REFERENCES lists_users (user_id), 
+        FOREIGN KEY(rating_id) REFERENCES ratings (rating_id), 
+        FOREIGN KEY(user_id) REFERENCES ratings_users (user_id)
+)
+
+/*
+3 rows from ratings table:
+movie_id        rating_id       rating_url      rating_score    rating_timestamp_utc    critic  critic_likes    critic_comments user_id user_trialist   user_subscriber       user_eligible_for_trial user_has_payment_method
+1066    15610495        http://mubi.com/films/pavee-lackeen-the-traveller-girl/ratings/15610495 3       2017-06-10 12:38:33     None    0       0       41579158     00       1       0
+1066    10704606        http://mubi.com/films/pavee-lackeen-the-traveller-girl/ratings/10704606 2       2014-08-15 23:42:31     None    0       0       85981819     11       0       1
+1066    10177114        http://mubi.com/films/pavee-lackeen-the-traveller-girl/ratings/10177114 2       2014-01-30 13:21:57     None    0       0       4208563 0    01       1
+*/
+
 Your response should be in the following JSON format:
 {{
     "is_relevant": boolean,
+    "is_dml": boolean,
     "relevant_tables": [
         {{
             "table_name": string,
@@ -57,6 +112,9 @@ The "noun_columns" field should contain only the columns that are relevant to th
         parsed_question = state["parsed_question"]
         # unique_nouns = state["unique_nouns"]
 
+        if parsed_question["is_dml"]:
+            return {"sql_query": "NOT_ALLOWED", "is_dml": True}
+
         if not parsed_question["is_relevant"]:
             return {"sql_query": "NOT_RELEVANT", "is_relevant": False}
 
@@ -85,6 +143,9 @@ Answer: SELECT \`product name\`, SUM(quantity) * 100.0 / (SELECT SUM(quantity) F
 4. Plot the distribution of income over time
 Answer: SELECT income, COUNT(*) as count FROM users WHERE income IS NOT NULL AND income != "" AND income != "N/A" GROUP BY income
 
+5. Describe movies table
+Answer: PRAGMA table_info(movies)
+
 THE RESULTS SHOULD ONLY BE IN THE FOLLOWING FORMAT, SO MAKE SURE TO ONLY GIVE TWO OR THREE COLUMNS:
 [[x, y]]
 or 
@@ -106,8 +167,8 @@ Just give the query string. Do not format it. Make sure to use the correct spell
 ===Relevant tables and columns:
 {parsed_question}
 
-# ===Unique nouns in relevant tables:
-# {unique_nouns}
+===Unique nouns in relevant tables:
+
 
 Generate SQL query string""",
                 ),
@@ -131,6 +192,9 @@ Generate SQL query string""",
         """Execute SQL query and return results."""
         query = state["sql_query"]
 
+        if query == "NOT_ALLOWED":
+            return {"results": "NOT_ALLOWED"}
+
         if query == "NOT_RELEVANT":
             return {"results": "NOT_RELEVANT"}
 
@@ -149,12 +213,16 @@ Generate SQL query string""",
             return {
                 "answer": "Sorry, I can only give answers relevant to the database."
             }
+        if results == "NOT_ALLOWED":
+            return {
+                "answer": "Sorry, DML statements (INSERT, UPDATE, DELETE, DROP etc.) are not allowed."
+            }
 
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
-                    "You are an AI assistant that formats database query results into a human-readable response. Give a conclusion to the user's question based on the query results. Do not give the answer in markdown format. Only give the answer in one line.",
+                    "You are an AI assistant that formats database query results into a human-readable response. Give a conclusion to the user's question based on the query results.",
                 ),
                 (
                     "human",
