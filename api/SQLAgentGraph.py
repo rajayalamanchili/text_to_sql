@@ -1,10 +1,10 @@
 from io import BytesIO
-from LLMState import State
-from SQLAgent import SQLAgent
 from langgraph.graph import StateGraph
 from langgraph.graph import END
 from dotenv import load_dotenv
 from PIL import Image
+from api.LLMState import State
+from api.SQLAgent import SQLAgent
 
 
 class SQLAgentGraph:

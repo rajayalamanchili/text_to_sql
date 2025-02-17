@@ -1,7 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from Database import Database
-from LLM import OpenAILLM
+from api.Database import Database
+from api.LLM import OpenAILLM
 
 
 class SQLAgent:

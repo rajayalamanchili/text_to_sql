@@ -1,9 +1,10 @@
+import os
 import streamlit as st
 import openai
 from huggingface_hub import whoami
 from langchain_community.utilities import SQLDatabase
 import requests
-import os
+from api.SQLAgentGraph import SQLAgentGraph
 
 OPENAI_API_KEY = ""
 HUGGINGFACEHUB_API_TOKEN = ""
@@ -49,8 +50,23 @@ def isvalid_db_uri(db_uri):
         db = SQLDatabase.from_uri(db_uri)
         return True
 
-    except:
+    except Exception:
         return False
+
+
+def get_agent_response(user_question: str):
+    """Get LLM response"""
+
+    response = "Not able to connect llm or database"
+
+    if isvalid_db_uri(DB_URI) and (
+        isvalid_openai_key(OPENAI_API_KEY)
+        or isvalid_huggingface_key(HUGGINGFACEHUB_API_TOKEN)
+    ):
+
+        response = SQLAgentGraph().run_sql_agent(question=user_question)["answer"]
+
+    return response
 
 
 with st.sidebar:
@@ -85,11 +101,12 @@ with st.sidebar:
             st.warning("Please enter valid api key!", icon="⚠️")
 
     st.subheader("Database")
-    DB_URI = st.text_input(
+    user_db_uri = st.text_input(
         "Provide a database URI", key="DB_URI", type="default", value=DB_URI
     )
 
-    if isvalid_db_uri(DB_URI):
+    if isvalid_db_uri(user_db_uri):
+        os.environ["DB_URI"] = user_db_uri
         st.success("Valid Database URI provided!", icon="✔️")
     else:
         st.warning("Please enter valid Database URI!", icon="⚠️")
@@ -124,7 +141,20 @@ if prompt := st.chat_input():
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
 
-    msg = "llm response"
+    # msg = "llm response"
 
-    st.session_state.messages.append({"role": "assistant", "content": msg})
-    st.chat_message("assistant").write(msg)
+    # st.session_state.messages.append({"role": "assistant", "content": msg})
+    # st.chat_message("assistant").write(msg)
+
+    if st.session_state.messages[-1]["role"] != "assistant":
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                llm_response = get_agent_response(prompt)
+                placeholder = st.empty()
+                full_response = ""
+                for item in llm_response:
+                    full_response += item
+                    placeholder.markdown(full_response)
+                placeholder.markdown(full_response)
+        message = {"role": "assistant", "content": full_response}
+        st.session_state.messages.append(message)
