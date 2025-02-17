@@ -1,6 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from typing_extensions import TypedDict
+
 
 
 class OpenAILLM:
@@ -22,11 +22,3 @@ class HuggingFaceLLM:
     def __init__(self):
         return
 
-
-class State(TypedDict):
-    """LLM state"""
-
-    question: str
-    query: str
-    result: str
-    answer: str

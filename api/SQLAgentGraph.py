@@ -1,7 +1,10 @@
-from langgraph.graph import StateGraph
-from LLM import State
+from io import BytesIO
+from LLMState import State
 from SQLAgent import SQLAgent
+from langgraph.graph import StateGraph
 from langgraph.graph import END
+from dotenv import load_dotenv
+from PIL import Image
 
 
 class SQLAgentGraph:
@@ -11,7 +14,7 @@ class SQLAgentGraph:
 
     def create_flow(self) -> StateGraph:
         """Create and configure the flow graph."""
-        flow = StateGraph(input=State, output=State)
+        flow = StateGraph(state_schema=State)
 
         # Add nodes to the graph
         flow.add_node("parse_question", self.sql_agent.parse_question)
@@ -21,20 +24,37 @@ class SQLAgentGraph:
 
         # Define edges
         flow.add_edge("parse_question", "generate_sql")
-        flow.add_edge("validate_and_fix_sql", "execute_sql")
-        flow.add_edge("generate_sql", "format_results")
+        flow.add_edge("generate_sql", "execute_sql")
+        flow.add_edge("execute_sql", "format_results")
         flow.add_edge("format_results", END)
         flow.set_entry_point("parse_question")
 
         return flow
 
-    def returnGraph(self):
+    def return_graph(self):
         return self.create_flow().compile()
 
-    def run_sql_agent(self, question: str, uuid: str) -> dict:
+    def run_sql_agent(self, question: str) -> dict:
         """Run the SQL agent workflow and return the formatted answer and visualization recommendation."""
         app = self.create_flow().compile()
-        result = app.invoke({"question": question, "uuid": uuid})
+        result = app.invoke({"question": question})
         return {
             "answer": result["answer"],
         }
+
+
+if __name__ == "__main__":
+
+    load_dotenv(override=True)
+
+    sql_agent_graph = SQLAgentGraph().return_graph()
+
+    img = Image.open(BytesIO(sql_agent_graph.get_graph().draw_mermaid_png()))
+    img.save("text_sql_graph.png")
+
+    test_question = "How many employees are there?"
+
+    for step in sql_agent_graph.stream(
+        {"question": test_question}, stream_mode="updates"
+    ):
+        print(step)

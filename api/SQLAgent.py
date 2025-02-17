@@ -13,7 +13,7 @@ class SQLAgent:
     def parse_question(self, state: dict) -> dict:
         """Parse user question and identify relevant tables and columns."""
         question = state["question"]
-        schema = self.db.get_schema(state["uuid"])
+        schema = self.db.get_schema()
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -55,12 +55,12 @@ The "noun_columns" field should contain only the columns that are relevant to th
         """Generate SQL query based on parsed question and unique nouns."""
         question = state["question"]
         parsed_question = state["parsed_question"]
-        unique_nouns = state["unique_nouns"]
+        # unique_nouns = state["unique_nouns"]
 
         if not parsed_question["is_relevant"]:
             return {"sql_query": "NOT_RELEVANT", "is_relevant": False}
 
-        schema = self.db.get_schema(state["uuid"])
+        schema = self.db.get_schema()
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -106,8 +106,8 @@ Just give the query string. Do not format it. Make sure to use the correct spell
 ===Relevant tables and columns:
 {parsed_question}
 
-===Unique nouns in relevant tables:
-{unique_nouns}
+# ===Unique nouns in relevant tables:
+# {unique_nouns}
 
 Generate SQL query string""",
                 ),
@@ -119,7 +119,7 @@ Generate SQL query string""",
             schema=schema,
             question=question,
             parsed_question=parsed_question,
-            unique_nouns=unique_nouns,
+            # unique_nouns=unique_nouns,
         )
 
         if response.strip() == "NOT_ENOUGH_INFO":
@@ -130,13 +130,12 @@ Generate SQL query string""",
     def execute_sql(self, state: dict) -> dict:
         """Execute SQL query and return results."""
         query = state["sql_query"]
-        uuid = state["uuid"]
 
         if query == "NOT_RELEVANT":
             return {"results": "NOT_RELEVANT"}
 
         try:
-            results = self.db.execute_query(uuid, query)
+            results = self.db.execute_query(query)
             return {"results": results}
         except Exception as e:
             return {"error": str(e)}
