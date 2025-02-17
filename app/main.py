@@ -83,9 +83,10 @@ with st.sidebar:
 
         if isvalid_openai_key(OPENAI_API_KEY):
             os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-
             st.success("Valid API key provided!", icon="✔️")
         else:
+            OPENAI_API_KEY = ""
+            os.environ["OPENAI_API_KEY"] = ""
             st.warning("Please enter valid api key!", icon="⚠️")
 
     elif model_provider == "Hugging Face":
@@ -95,9 +96,10 @@ with st.sidebar:
 
         if isvalid_huggingface_key(HUGGINGFACEHUB_API_TOKEN):
             os.environ["HUGGINGFACEHUB_API_TOKEN"] = HUGGINGFACEHUB_API_TOKEN
-
             st.success("Valid API key provided!", icon="✔️")
         else:
+            HUGGINGFACEHUB_API_TOKEN = ""
+            os.environ["HUGGINGFACEHUB_API_TOKEN"] = ""
             st.warning("Please enter valid api key!", icon="⚠️")
 
     st.subheader("Database")
@@ -109,6 +111,8 @@ with st.sidebar:
         os.environ["DB_URI"] = user_db_uri
         st.success("Valid Database URI provided!", icon="✔️")
     else:
+        DB_URI = ""
+        os.environ["DB_URI"] = ""
         st.warning("Please enter valid Database URI!", icon="⚠️")
 
 
@@ -140,11 +144,6 @@ if prompt := st.chat_input():
 
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
-
-    # msg = "llm response"
-
-    # st.session_state.messages.append({"role": "assistant", "content": msg})
-    # st.chat_message("assistant").write(msg)
 
     if st.session_state.messages[-1]["role"] != "assistant":
         with st.chat_message("assistant"):
