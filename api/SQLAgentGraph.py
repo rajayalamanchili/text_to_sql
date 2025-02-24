@@ -22,6 +22,7 @@ class SQLAgentGraph:
         flow.add_node("parse_question", self.sql_agent.parse_question)
         flow.add_node("get_unique_nouns", self.sql_agent.get_unique_nouns)
         flow.add_node("generate_sql", self.sql_agent.generate_sql)
+        flow.add_node("validate_and_fix_sql", self.sql_agent.validate_and_fix_sql)
         flow.add_node("execute_sql", self.sql_agent.execute_sql)
         flow.add_node("format_results", self.sql_agent.format_results)
         flow.add_node("choose_visualization", self.sql_agent.choose_visualization)
@@ -33,7 +34,8 @@ class SQLAgentGraph:
         # Define edges
         flow.add_edge("parse_question", "get_unique_nouns")
         flow.add_edge("get_unique_nouns", "generate_sql")
-        flow.add_edge("generate_sql", "execute_sql")
+        flow.add_edge("generate_sql", "validate_and_fix_sql")
+        flow.add_edge("validate_and_fix_sql", "execute_sql")
         flow.add_edge("execute_sql", "format_results")
         flow.add_edge("execute_sql", "choose_visualization")
         flow.add_edge("choose_visualization", "format_data_for_visualization")
@@ -75,7 +77,8 @@ if __name__ == "__main__":
     # test_question = "how many albums does ac dc have?"
     # test_question = "how many albums does Alice In Chains have?"
     # test_question = "how many albums does Alis In Chain have?"
-    test_question = "count number of employees by title"
+    # test_question = "count number of employees by title"
+    test_question = "how many tracks each artist has ?"
 
     for step in sql_agent_graph.stream(
         {"question": test_question}, stream_mode="updates"

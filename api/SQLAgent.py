@@ -147,10 +147,16 @@ class SQLAgent:
                     5. Describe movies table
                     Answer: PRAGMA table_info(movies)
 
+                    6. What are the orders placed by customer ?
+                    Answer: SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate FROM Orders INNER JOIN Customers ON Orders.CustomerID=Customers.CustomerID
+
                     THE RESULTS SHOULD ONLY BE IN THE FOLLOWING FORMAT, SO MAKE SURE TO ONLY GIVE TWO OR THREE COLUMNS:
                     [[x, y]]
                     or 
                     [[label, x, y]]
+
+                    For join sql queries ensure all column names have table names
+                    example: SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate FROM Orders INNER JOIN Customers ON Orders.CustomerID=Customers.CustomerID
                                 
                     For questions like "plot a distribution of the fares for men and women", count the frequency of each fare and plot it. The x axis should be the fare and the y axis should be the count of people who paid that fare.
                     SKIP ALL ROWS WHERE ANY COLUMN IS NULL or "N/A" or "".
@@ -268,6 +274,12 @@ class SQLAgent:
                 "visualization_reasoning": "No visualization needed for irrelevant questions.",
             }
 
+        elif "Error:" in results:
+            return {
+                "visualization": "none",
+                "visualization_reasoning": "No visualization needed for sql errors.",
+            }
+
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
@@ -316,3 +328,83 @@ class SQLAgent:
         reason = lines[1].split(": ")[1]
 
         return {"visualization": visualization, "visualization_reason": reason}
+
+    def validate_and_fix_sql(self, state: dict) -> dict:
+        """Validate and fix the generated SQL query."""
+        sql_query = state["sql_query"]
+
+        if sql_query == "NOT_RELEVANT":
+            return {"sql_query": "NOT_RELEVANT", "sql_valid": False}
+
+        schema = self.db.get_schema()
+
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """
+                You are an AI assistant that validates and fixes SQL queries. Your task is to:
+                1. Check if the SQL query is valid.
+                2. Ensure all table and column names are correctly spelled and exist in the schema. All the table and column names should be enclosed in backticks.
+                3. If there are any issues, fix them and provide the corrected SQL query.
+                4. If no issues are found, return the original query.
+
+                Respond in JSON format with the following structure. Only respond with the JSON:
+                {{
+                    "valid": boolean,
+                    "issues": string or null,
+                    "corrected_query": string
+                }}
+                """,
+                ),
+                (
+                    "human",
+                    """===Database schema:
+                {schema}
+
+                ===Generated SQL query:
+                {sql_query}
+
+                Respond in JSON format with the following structure. Only respond with the JSON:
+                {{
+                    "valid": boolean,
+                    "issues": string or null,
+                    "corrected_query": string
+                }}
+
+                For example:
+                1. {{
+                    "valid": true,
+                    "issues": null,
+                    "corrected_query": "None"
+                }}
+                            
+                2. {{
+                    "valid": false,
+                    "issues": "Column USERS does not exist",
+                    "corrected_query": "SELECT * FROM \`users\` WHERE age > 25"
+                }}
+
+                3. {{
+                    "valid": false,
+                    "issues": "Column names and table names should be enclosed in backticks if they contain spaces or special characters",
+                    "corrected_query": "SELECT * FROM \`gross income\` WHERE \`age\` > 25"
+                }}
+
+                """,
+                ),
+            ]
+        )
+
+        output_parser = JsonOutputParser()
+        response = self.llm.invoke(prompt, schema=schema, sql_query=sql_query)
+        result = output_parser.parse(response)
+
+        if result["valid"] and result["issues"] is None:
+            return {"sql_query": sql_query, "sql_valid": True}
+        else:
+            return {
+                "sql_query": result["corrected_query"],
+                "sql_valid": result["valid"],
+                "sql_issues": result["issues"],
+            }

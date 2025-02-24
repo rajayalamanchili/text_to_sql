@@ -14,3 +14,5 @@ class State(TypedDict):
     visualization: Annotated[str, operator.add]
     visualization_reason: Annotated[str, operator.add]
     formatted_data_for_visualization: Dict[str, Any]
+    sql_valid: bool
+    sql_issues: str
