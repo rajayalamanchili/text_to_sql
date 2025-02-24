@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import pandas as pd
 import openai
 from huggingface_hub import whoami
 from langchain_community.utilities import SQLDatabase
@@ -57,16 +58,66 @@ def isvalid_db_uri(db_uri):
 def get_agent_response(user_question: str):
     """Get LLM response"""
 
-    response = "Not able to connect llm or database"
+    response = {"answer": "Not able to connect llm or database"}
 
     if isvalid_db_uri(DB_URI) and (
         isvalid_openai_key(OPENAI_API_KEY)
         or isvalid_huggingface_key(HUGGINGFACEHUB_API_TOKEN)
     ):
 
-        response = SQLAgentGraph().run_sql_agent(question=user_question)["answer"]
+        response = SQLAgentGraph().run_sql_agent(question=user_question)
 
     return response
+
+    # return {
+    #     "sql_query": 'SELECT Title, COUNT(*) as employee_count FROM `Employee` WHERE Title IS NOT NULL AND Title != "" AND Title != "N/A" GROUP BY Title',
+    #     "answer": "The count of employees by title is as follows:\n\n- General Manager: 1\n- IT Manager: 1\n- IT Staff: 2\n- Sales Manager: 1\n- Sales Support Agent: 3\n\nIn total, there are 8 employees across these titles.",
+    #     "visualization": "bar",
+    #     "visualization_reason": "A bar graph is suitable for comparing the number of employees across different job titles, as it allows for easy comparison of categorical data.",
+    #     "formatted_data_for_visualization": {
+    #         "labels": [
+    #             "General Manager",
+    #             "IT Manager",
+    #             "IT Staff",
+    #             "Sales Manager",
+    #             "Sales Support Agent",
+    #         ],
+    #         "values": [
+    #             {"data": [1.0, 1.0, 2.0, 1.0, 3.0], "label": "Employee Count by Title"}
+    #         ],
+    #     },
+    # }
+
+
+def display_agent_response(content):
+    """display agent reponse"""
+
+    if content["answer"]:
+        st.write(content["answer"])
+    if content["sql_query"]:
+        st.write("**SQL Query:**\n\n" + "```" + content["sql_query"] + "```")
+    if (
+        content["visualization"]
+        and content["visualization"] != "none"
+        and "values" in content["formatted_data_for_visualization"]
+    ):
+        st.write("**Visualization:**\n\n")
+
+        match content["visualization"]:
+            case "bar":
+                st.bar_chart(
+                    data=pd.Series(
+                        content["formatted_data_for_visualization"]["values"][0][
+                            "data"
+                        ],
+                        index=content["formatted_data_for_visualization"]["labels"],
+                    ),
+                    x_label=content["formatted_data_for_visualization"]["values"][0][
+                        "label"
+                    ],
+                )
+            case _:
+                st.write("**Visualization Error\n\n")
 
 
 with st.sidebar:
@@ -120,12 +171,27 @@ st.title("SQL Data assistant")
 st.caption("🚀 A Streamlit application")
 
 if "messages" not in st.session_state:
+
     st.session_state["messages"] = [
-        {"role": "assistant", "content": "How can I help you?"}
+        {
+            "role": "assistant",
+            "content": {
+                "answer": "How can I help you?",
+                "sql_query": "",
+                "visualization": "",
+                "formatted_data_for_visualization": {},
+            },
+        }
     ]
 
 for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).write(msg["content"])
+
+    if msg["role"] == "user":
+        st.chat_message(msg["role"]).write(msg["content"])
+
+    elif msg["role"] == "assistant":
+        with st.chat_message("assistant"):
+            display_agent_response(msg["content"])
 
 if prompt := st.chat_input():
     if model_provider == "OpenAI" and not isvalid_openai_key(OPENAI_API_KEY):
@@ -149,11 +215,6 @@ if prompt := st.chat_input():
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 llm_response = get_agent_response(prompt)
-                placeholder = st.empty()
-                full_response = ""
-                for item in llm_response:
-                    full_response += item
-                    placeholder.markdown(full_response)
-                placeholder.markdown(full_response)
-        message = {"role": "assistant", "content": full_response}
+                display_agent_response(llm_response)
+        message = {"role": "assistant", "content": llm_response}
         st.session_state.messages.append(message)

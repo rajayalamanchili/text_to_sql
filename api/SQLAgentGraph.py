@@ -51,6 +51,7 @@ class SQLAgentGraph:
         app = self.create_flow().compile()
         result = app.invoke({"question": question})
         return {
+            "sql_query": result["sql_query"],
             "answer": result["answer"],
             "visualization": result["visualization"],
             "visualization_reason": result["visualization_reason"],
