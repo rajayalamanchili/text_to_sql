@@ -3,3 +3,4 @@ langchain
 langgraph
 langchain-openai
 langchain-huggingface
+langchain-ollama

@@ -11,7 +11,7 @@ from api.visualizations import VisualizationDataFormatter
 class SQLAgentGraph:
 
     def __init__(self):
-        self.sql_agent = SQLAgent()
+        self.sql_agent = SQLAgent("ollama")
         self.visualizationDataFormatter = VisualizationDataFormatter()
 
     def create_flow(self) -> StateGraph:
@@ -77,8 +77,8 @@ if __name__ == "__main__":
     # test_question = "how many albums does ac dc have?"
     # test_question = "how many albums does Alice In Chains have?"
     # test_question = "how many albums does Alis In Chain have?"
-    # test_question = "count number of employees by title"
-    test_question = "how many tracks each artist has ?"
+    test_question = "count number of employees by title"
+    # test_question = "how many tracks each artist has ?"
 
     for step in sql_agent_graph.stream(
         {"question": test_question}, stream_mode="updates"

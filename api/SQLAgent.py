@@ -2,14 +2,18 @@ from ast import literal_eval
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from api.Database import Database
-from api.LLM import OpenAILLM
+from api.LLM import OpenAILLM, OllamaLLM
 
 
 class SQLAgent:
 
-    def __init__(self):
+    def __init__(self, llm_provider="openai"):
         self.db = Database()
-        self.llm = OpenAILLM()
+
+        if llm_provider == "openai":
+            self.llm = OpenAILLM()
+        else:
+            self.llm = OllamaLLM()
 
     def parse_question(self, state: dict) -> dict:
         """Parse user question and identify relevant tables and columns."""
