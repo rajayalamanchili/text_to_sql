@@ -27,7 +27,7 @@ class OllamaLLM:
     """LLM with Ollama models"""
 
     def __init__(self):
-        self.llm = ChatOllama(model="gemma2:2b", temperature=0)
+        self.llm = ChatOllama(model="gemma2:2b", temperature=0, num_ctx=5000)
 
     def invoke(self, prompt: ChatPromptTemplate, **kwargs) -> str:
         """invoke llm"""
