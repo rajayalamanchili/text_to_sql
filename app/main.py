@@ -12,6 +12,7 @@ HUGGINGFACEHUB_API_TOKEN = ""
 DB_URI = "sqlite:///Chinook.db"
 
 
+
 def isvalid_openai_key(api_key):
     """validate if OpenAI api key is valid"""
 
@@ -22,6 +23,7 @@ def isvalid_openai_key(api_key):
     try:
         client.models.list()
     except openai.AuthenticationError:
+
         return False
 
     return True
@@ -60,12 +62,14 @@ def get_agent_response(user_question: str):
 
     response = {"answer": "Not able to connect llm or database"}
 
-    if isvalid_db_uri(DB_URI) and (
-        isvalid_openai_key(OPENAI_API_KEY)
-        or isvalid_huggingface_key(HUGGINGFACEHUB_API_TOKEN)
-    ):
+    if isvalid_db_uri(DB_URI) and isvalid_openai_key(OPENAI_API_KEY):
 
-        response = SQLAgentGraph().run_sql_agent(question=user_question)
+        response = SQLAgentGraph(llm_provider="openai").run_sql_agent(question=user_question)
+
+    elif isvalid_db_uri(DB_URI) and isvalid_huggingface_key(HUGGINGFACEHUB_API_TOKEN):
+
+        response = SQLAgentGraph(llm_provider="huggingface").run_sql_agent(question=user_question)
+
 
     return response
 
@@ -94,10 +98,11 @@ def display_agent_response(content):
 
     if content["answer"]:
         st.write(content["answer"])
-    if content["sql_query"]:
+    if ("sql_query" in content) and content["sql_query"]:
         st.write("**SQL Query:**\n\n" + "```" + content["sql_query"] + "```")
     if (
-        content["visualization"]
+        ("visualization" in content)
+        and content["visualization"]
         and content["visualization"] != "none"
         and "values" in content["formatted_data_for_visualization"]
     ):

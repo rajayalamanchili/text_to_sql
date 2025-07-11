@@ -10,8 +10,8 @@ from api.visualizations import VisualizationDataFormatter
 
 class SQLAgentGraph:
 
-    def __init__(self):
-        self.sql_agent = SQLAgent("ollama")
+    def __init__(self, llm_provider="openai"):
+        self.sql_agent = SQLAgent(llm_provider)
         self.visualizationDataFormatter = VisualizationDataFormatter()
 
     def create_flow(self) -> StateGraph:
