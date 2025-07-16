@@ -8,25 +8,17 @@ terraform {
 }
 
 provider "aws" {
-  region = ""
+  region = var.region
 }
 
-data "aws_ami" "ubuntu" {
-  most_recent = true
+module "vpc" {
+  source = "./modules/vpc"
 
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
-  }
-
-  owners = ["099720109477"] # Canonical
+  app_name = var.app_name
+  env      = var.env
 }
 
-resource "aws_instance" "app_server" {
-  ami           = data.aws_ami.ubuntu.id
-  instance_type = "t2.micro"
+module "ecr_repo" {
+  source = "./modules/ecr"
 
-  tags = {
-    Name = "test-terraform"
-  }
 }
