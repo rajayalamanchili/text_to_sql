@@ -9,3 +9,13 @@ variable "app_name" {
 variable "region" {
   default = "us-east-2"
 }
+
+variable "ecs_lb_listener_port" {
+  type    = number
+  default = 80
+}
+
+variable "app_port" {
+  type    = number
+  default = 8501
+}
