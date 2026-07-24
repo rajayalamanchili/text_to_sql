@@ -86,19 +86,49 @@ deterministic enforce → execute only if enforcement passes.
 
 **Response 200** (allowed): `{ query_id, rows: [...], policy_version_used }`
 
-**Response 403** (blocked): `{ query_id, reason: "column blocked by policy: member_ssn", policy_version_used }`
+All rejection responses share one shape:
+`{ query_id, reason_code, reason_message, policy_version_used }`, where
+`reason_code` is one of the fixed enum values defined in
+`data-model.md#AuditLogEntry` (FR-010) — never a free-form string alone —
+and `reason_message` is the human-readable template rendered for that
+code.
+
+**Response 403** (`reason_code: "COLUMN_BLOCKED"`): `{ query_id, reason_code: "COLUMN_BLOCKED", reason_message: "column blocked by policy: member_ssn", policy_version_used }`
 (Scenario 4) — rejection MUST NOT depend on any LLM self-report about the
 query (Constitution Principle I).
 
-**Response 403** (DML rejected): `{ query_id, reason: "DML statement rejected: read-only queries only", policy_version_used }`
+**Response 403** (`reason_code: "NO_ACTIVE_POLICY"`): `{ query_id, reason_code: "NO_ACTIVE_POLICY", reason_message: "schema not yet classified", policy_version_used }`
+(FR-009, Scenario 6) — any table/column absent from the active policy
+artifact defaults closed.
+
+**Response 403** (`reason_code: "ROLE_GATE_MISMATCH"`): `{ query_id, reason_code: "ROLE_GATE_MISMATCH", reason_message: "column requires role: admin", policy_version_used }`
+(FR-008, Scenario 7) — returned when the gated column's
+`on_role_mismatch` is `reject` (the default). When explicitly configured
+to `exclude` instead, the gated column is silently omitted and a
+**Response 200** (allowed, with the column excluded) is returned instead.
+
+**Response 403** (`reason_code: "DML_REJECTED"`): `{ query_id, reason_code: "DML_REJECTED", reason_message: "DML statement rejected: read-only queries only", policy_version_used }`
 (FR-014, Scenario 9) — any non-`SELECT` root statement is rejected before
 any column/table policy lookup, based purely on the parsed AST's statement
 type.
 
-**Response 200** (irrelevant question): `{ query_id, reason: "question not mapped to schema" }`
+**Response 403** (`reason_code: "MULTIPLE_STATEMENTS_REJECTED"`): `{ query_id, reason_code: "MULTIPLE_STATEMENTS_REJECTED", reason_message: "multiple statements not allowed: read-only single-statement queries only", policy_version_used }`
+(FR-014, Scenario 9) — any input that parses into more than one SQL
+statement is rejected unconditionally, before any other check, including
+the `DML_REJECTED` check above.
+
+**Response 403** (`reason_code: "ENFORCEMENT_ERROR"`): `{ query_id, reason_code: "ENFORCEMENT_ERROR", reason_message: "policy enforcement failed; query rejected", policy_version_used }`
+(FR-007, Scenario 11) — returned when the active policy artifact fails to
+load or the enforcement component hits an unexpected internal error;
+`policy_version_used` is null if the failure occurred before a policy
+version could be resolved. Fails closed rather than behaving like an
+implicit pass.
+
+**Response 200** (irrelevant question, `reason_code: "QUESTION_NOT_MAPPED"`): `{ query_id, reason_code: "QUESTION_NOT_MAPPED", reason_message: "question not mapped to schema" }`
 (FR-014, Scenario 10) — returned when no table/column in the question maps
 to the domain's schema; no SQL is generated or executed, and no
-policy-blocked table/column names are revealed.
+policy-blocked table/column names are revealed. This is a `200`, not a
+`403`, since no query was ever attempted against the database.
 
 **Constraints**: Enforcement check itself (excluding any LLM generation
 step) MUST add ≤200ms latency (NFR-002).

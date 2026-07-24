@@ -30,7 +30,7 @@ generated client (frontend) — all per `tech-stack.md` (locked, authoritative).
 fintech) plus an `audit_log` table; versioned YAML policy artifacts
 committed to git (not database-backed) per `tech-stack.md`.
 
-**Testing**: `pytest` (unit/integration), `pytest-bdd` (executes the 10
+**Testing**: `pytest` (unit/integration), `pytest-bdd` (executes the 11
 Given/When/Then scenarios in `spec.md` directly), a custom precision/recall
 scoring script against hand-labeled ground truth for classifier eval.
 
@@ -100,6 +100,25 @@ spec.md); the `policy/` structure below no longer names an unimplemented
 section now cross-references `Caller` and `Domain` (defined in
 data-model.md) for completeness.
 
+**Post-Clarify Re-check (2026-07-24)**: `/speckit.clarify` and a follow-on
+`/speckit.analyze` remediation added five requirements to `spec.md` on
+2026-07-24 — FR-007's fail-closed `ENFORCEMENT_ERROR` behavior on
+policy-load/internal-error, FR-007's severity-ranked violation-reporting
+precedence, FR-014's unconditional multi-statement rejection, Scenario 5's
+explicit AND-merge (not overwrite) predicate-injection rule, and FR-010's
+fixed reason-code enum — plus Scenario 11 (enforcement-path failure) and
+an extension to Scenario 9 (multi-statement input). None of these
+introduce a new architectural component, an LLM call in the enforcement
+path, or an unbounded loop; they are additive checks/fields within the
+same deterministic enforcement node and audit-log writer already
+described in research.md §5 and §8. All ten principles above still hold:
+notably, Principle I is strengthened (an internal enforcement failure now
+fails closed rather than being undefined behavior) and Principle VI's eval
+gate now explicitly requires the corresponding scenario/task coverage
+added in `tasks.md` (T057a, T052a) — tracked as **CRITICAL** findings C1–C3
+in the 2026-07-24 `/speckit.analyze` report until that coverage existed;
+that coverage is now in place.
+
 ## Project Structure
 
 ### Documentation (this feature)
@@ -135,7 +154,7 @@ backend/
 │   └── fintech/             # Faker/PaySim-style schema.sql + seed script
 └── tests/
     ├── contract/            # API contract tests
-    ├── integration/          # pytest-bdd step defs for the 10 spec.md scenarios
+    ├── integration/          # pytest-bdd step defs for the 11 spec.md scenarios
     └── unit/                 # heuristic classifier, confidence combination, sqlglot enforcement
 
 frontend/

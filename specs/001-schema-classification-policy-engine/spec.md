@@ -58,8 +58,8 @@ review — never silently allowed.
 the block (e.g., due to prompt injection or model error)
 **When** the query reaches the policy enforcement node
 **Then** the query is rejected before execution
-**And** the rejection is logged with the reason "column blocked by policy:
-member_ssn"
+**And** the rejection is logged with `reason_code: COLUMN_BLOCKED`
+(message: "column blocked by policy: member_ssn")
 **And** the rejection does NOT depend on the LLM having correctly
 self-reported anything about the query.
 
@@ -68,7 +68,8 @@ self-reported anything about the query.
 **And** a user-generated question that does not mention tenant scoping
 **When** SQL is generated and reaches the enforcement node
 **Then** the tenant predicate is injected deterministically into the
-executed query
+executed query — AND-merged at the AST level with whatever `WHERE`
+clause the LLM's SQL already contained, never overwriting or stripping it
 **And** the query cannot return rows outside the caller's tenant, even if
 the LLM's generated SQL omitted or contradicted that scoping.
 
@@ -76,7 +77,8 @@ the LLM's generated SQL omitted or contradicted that scoping.
 **Given** a newly onboarded schema that has not yet completed
 classification
 **When** any query references a column from that schema
-**Then** the query is rejected with reason "schema not yet classified"
+**Then** the query is rejected with `reason_code: NO_ACTIVE_POLICY`
+(message: "schema not yet classified")
 **And** no data from that schema is returned under any circumstance.
 
 ### Scenario 7: Role-gated column is visible only to the correct role
@@ -85,8 +87,8 @@ roles: [admin]`
 **When** a user with role `analyst` asks a
 question that would surface this column
 **Then** the query is rejected (or the column is silently excluded from
-results, per FR-008 configuration) with reason "column requires role:
-admin"
+results, per FR-008 configuration) with `reason_code: ROLE_GATE_MISMATCH`
+(message: "column requires role: admin")
 **And** the same query succeeds for a user with role `admin`.
 
 ### Scenario 8: Only an admin can approve a pending classification
@@ -105,11 +107,16 @@ allow read access to the `transactions` table
 **When** the query reaches the policy enforcement node
 **Then** the query is rejected before execution, regardless of what any
 column- or table-level policy would otherwise allow
-**And** the rejection is logged with the reason "DML statement rejected:
-read-only queries only"
+**And** the rejection is logged with `reason_code: DML_REJECTED`
+(message: "DML statement rejected: read-only queries only")
 **And** the rejection does NOT depend on the LLM having self-reported that
 its own query is DML (this is the exact failure mode Constitution
 Principle I exists to prevent).
+**And** this rejection applies identically to a single-statement DML
+query and to a stacked multi-statement input (e.g.,
+`SELECT * FROM transactions; DROP TABLE transactions;`), the latter
+logged with `reason_code: MULTIPLE_STATEMENTS_REJECTED` instead of
+`DML_REJECTED`.
 
 ### Scenario 10: Irrelevant question does not leak schema or bypass enforcement
 **Given** a healthcare domain with an approved policy
@@ -117,10 +124,21 @@ Principle I exists to prevent).
 is the weather today?")
 **When** the question reaches the query graph
 **Then** no SQL is executed against the domain database
-**And** the response indicates the question could not be mapped to the
-schema, without revealing table/column names that a policy would otherwise
-block
+**And** the response indicates `reason_code: QUESTION_NOT_MAPPED` (message:
+"question not mapped to schema"), without revealing table/column names
+that a policy would otherwise block
 **And** no policy bypass or data return occurs under any circumstance.
+
+### Scenario 11: Enforcement-path failure fails closed, never open
+**Given** a domain whose active policy artifact has become unreadable
+(e.g., the policy YAML is corrupted or the file is missing), OR the
+enforcement component raises an unexpected internal error while
+evaluating a query
+**When** a query reaches the policy enforcement node
+**Then** the query is rejected before execution
+**And** the rejection is logged with reason `ENFORCEMENT_ERROR`
+**And** no data is returned under any circumstance, even though no
+column- or table-level policy was actually violated.
 
 ## Functional Requirements
 
@@ -148,7 +166,22 @@ block
 - **FR-007**: The system MUST provide a policy enforcement component that
   loads the active policy artifact for a domain and deterministically
   evaluates every generated SQL query against it before execution —
-  independent of any LLM-reported metadata about that query.
+  independent of any LLM-reported metadata about that query. If the
+  active policy artifact cannot be loaded, or the enforcement component
+  encounters an unexpected internal error while evaluating a query, the
+  query MUST be rejected (fail closed) and logged with reason
+  `ENFORCEMENT_ERROR` — an enforcement-path failure MUST NOT be allowed
+  to behave like an implicit pass, consistent with FR-009's
+  default-closed behavior. When a single query trips more than one
+  independent column/table-level policy violation, the reported reason
+  is chosen by severity, not by AST scan order: `ENFORCEMENT_ERROR`
+  (FR-007) and no-active-policy default-closed (FR-009) or an explicit
+  `block` action (FR-008) rank highest — any of these alone rejects the
+  whole query — followed by `role_gate` mismatch (FR-008), followed by
+  row-policy predicate injection (Scenario 5), which does not itself
+  cause rejection. The non-`SELECT`/DML check (FR-014) and the
+  question-to-schema mapping check (Scenario 10) remain structurally
+  prior to all of the above, per FR-014.
 - **FR-008**: The policy enforcement component MUST support at minimum
   these actions per column: `allow`, `block`, `role_gate` (visible only to
   specified roles), and per table: row-level predicate injection. For
@@ -168,7 +201,13 @@ block
   column that has no active approved policy, defaulting closed.
 - **FR-010**: The system MUST log every classification decision and every
   enforcement decision (allow/block/mask, and why) in a queryable audit
-  log.
+  log. Every enforcement decision's "why" MUST be one of a fixed,
+  versioned reason-code enum (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`,
+  `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`,
+  `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR`),
+  each paired with a human-readable message template — never a free-form
+  string alone — so that querying by decision type (NFR-004) does not
+  depend on string matching.
 - **FR-011**: The system MUST support at least two independently
   configured domains (healthcare, fintech) running against the same
   engine codebase with zero domain-specific code paths.
@@ -184,10 +223,17 @@ block
   statement that is not a read-only `SELECT` (e.g., `INSERT`, `UPDATE`,
   `DELETE`, `DROP`, `ALTER`, `TRUNCATE`) unconditionally, before any
   column- or table-level policy is evaluated — independent of any
-  LLM-reported metadata about the statement's nature (Scenario 9). A
-  question that cannot be mapped to any table in the domain's active
-  policy MUST NOT execute any SQL and MUST NOT reveal schema details that
-  a policy would otherwise block (Scenario 10).
+  LLM-reported metadata about the statement's nature (Scenario 9). This
+  check MUST also reject, unconditionally and before any other check,
+  any input that parses into more than one SQL statement (e.g., a
+  `SELECT` followed by a stacked `DROP TABLE`) — only the first statement
+  being inspected is explicitly disallowed, since that would reopen the
+  self-report/bypass failure mode Constitution Principle I exists to
+  prevent; this is logged with its own reason,
+  `MULTIPLE_STATEMENTS_REJECTED`. A question that cannot be mapped to any
+  table in the domain's active policy MUST NOT execute any SQL and MUST
+  NOT reveal schema details that a policy would otherwise block
+  (Scenario 10).
 
 ## Non-Functional Requirements / Constraints
 
@@ -207,8 +253,13 @@ block
   source (heuristic|llm|human), reviewed_by, reviewed_at}`
 - **Policy Artifact**: `{domain, version, tables: [{table_name, columns:
   {...}, row_policy_template}], approved_by, approved_at}`
-- **Audit Log Entry**: `{timestamp, domain, query_id, decision, reason,
-  policy_version_used}`
+- **Audit Log Entry**: `{timestamp, domain, query_id, decision, reason_code,
+  reason_message, policy_version_used}` — `reason_code` is a fixed,
+  versioned enum value (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`,
+  `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`,
+  `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR`),
+  and `reason_message` is the associated human-readable message rendered
+  from that code's template, per FR-010.
 
 Two supporting, non-persisted concepts are also defined in `data-model.md`
 but are intentionally not listed above since they aren't stored business
@@ -243,7 +294,7 @@ entities: **Caller** (the per-request role, from FR-008's auth stub) and
   in `plan.md` (suggested starting bar: precision ≥ 0.85, recall ≥ 0.85
   on `pii_direct` classifications specifically, since false negatives
   there are the highest-consequence error).
-- All ten behavioral scenarios above pass as automated tests.
+- All eleven behavioral scenarios above pass as automated tests.
 - The same engine codebase runs both the healthcare and fintech domain
   configurations with no domain-specific conditionals in engine source
   files.
@@ -281,6 +332,73 @@ new functional requirement (FR-013) were added. Success criteria updated
 from six to eight required passing scenarios. This spec is now ready for
 `/speckit.plan`.
 
+### Session 2026-07-24
+
+- **Q: When the policy enforcement path itself fails — the active policy
+  artifact can't be loaded, or the enforcement component hits an
+  unexpected internal error — what should happen to the query?**
+  **A**: Fail closed uniformly. Both a policy-load failure and an
+  unexpected internal enforcement error reject the query before
+  execution, logged under a distinct reason (`ENFORCEMENT_ERROR`),
+  consistent with FR-009's default-closed behavior — an enforcement-path
+  failure is never allowed to behave like an implicit pass. Affects
+  FR-007.
+
+- **Q: When a single query trips more than one independent
+  column/table-level policy violation (e.g., one referenced column has
+  no approved policy while a different column is role-gated against the
+  caller), what should the enforcement node report?**
+  **A**: A fixed severity ranking, not AST scan order: `ENFORCEMENT_ERROR`
+  / no-active-policy default-closed (FR-009) / explicit `block` (FR-008)
+  rank highest (any one alone rejects the whole query), then `role_gate`
+  mismatch (FR-008), then row-policy predicate injection (Scenario 5,
+  which doesn't itself cause rejection). The FR-014 non-`SELECT`/DML
+  check and the Scenario 10 question-to-schema mapping check remain
+  structurally prior to this ranking, as FR-014 already specifies.
+  Affects FR-007, FR-008, FR-009, FR-014.
+
+- **Q: Does FR-014's non-`SELECT` rejection also cover a single input
+  containing multiple SQL statements (e.g., a `SELECT` followed by a
+  stacked `DROP TABLE`)?**
+  **A**: Yes, unconditionally. Any input that parses into more than one
+  SQL statement is rejected outright, before any per-statement check
+  runs, logged with its own reason (`MULTIPLE_STATEMENTS_REJECTED`) —
+  never evaluated as "check only the first statement," since that would
+  reopen exactly the self-report/bypass failure mode Constitution
+  Principle I exists to prevent. Affects FR-014.
+
+- **Q: When the LLM-generated SQL already contains its own predicate on
+  the row-policy's governed column (e.g., a wrong or conflicting
+  `tenant_id = 'x'`), how should the injected row-policy predicate
+  combine with it?**
+  **A**: AND-merge, not overwrite. The enforcement component wraps the
+  LLM's existing `WHERE` clause in parentheses and ANDs it with the
+  policy's own predicate, at the AST level, without attempting to detect
+  or strip anything the LLM wrote. This can only ever narrow the result
+  set, never widen it, regardless of what the LLM's clause contains —
+  correct even when the LLM's predicate can't be reliably identified and
+  removed from an arbitrary boolean expression. Affects Scenario 5.
+
+- **Q: Should the audit log's enforcement "reason" (e.g.,
+  "column blocked by policy: X", "schema not yet classified",
+  `enforcement_error`, `multiple_statements_rejected`) be a fixed,
+  enumerable scheme, or free-form text?**
+  **A**: A fixed, versioned reason-code enum — `COLUMN_BLOCKED`,
+  `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`,
+  `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`,
+  `ENFORCEMENT_ERROR` — each paired with a human-readable message
+  template. This is what makes NFR-004's "queryable... by decision type"
+  requirement objectively testable, rather than dependent on exact
+  string/substring matching. Affects FR-010, NFR-004, Key Entities
+  (Audit Log Entry).
+
+**Impact of this session**: FR-007 and FR-014 gained explicit
+fail-closed/rejection requirements for enforcement-path failures and
+multi-statement input; FR-007–FR-009/FR-014 gained a defined
+violation-reporting precedence; Scenario 5 gained an explicit AND-merge
+predicate-injection rule; and the audit log's `reason_code` field is now
+a fixed enum rather than free text (FR-010).
+
 ## Amendments
 
 ### 2026-07-23 — `/speckit.analyze` remediation
@@ -307,3 +425,26 @@ from six to eight required passing scenarios. This spec is now ready for
 - (Tracked in `plan.md`/`tasks.md`, not here): the orphaned `policy_loader.py`
   filename was removed from `plan.md`'s Project Structure, and a synthetic-data
   regression safeguard task (FR-012) was added to `tasks.md`.
+
+### 2026-07-24 — `/speckit.analyze` remediation
+
+- **Reason-code casing** normalized: FR-007 and FR-014 previously used
+  lowercase `enforcement_error`/`multiple_statements_rejected` while
+  FR-010 and Key Entities used the uppercase enum spelling
+  (`ENFORCEMENT_ERROR`/`MULTIPLE_STATEMENTS_REJECTED`) for the same
+  codes. All in-line mentions (including the 2026-07-24 Clarifications
+  session Q&A) now use the uppercase form consistently.
+- **Scenario 11** added: the 2026-07-24 clarification session added
+  FR-007's enforcement-path-failure fail-closed requirement
+  (`ENFORCEMENT_ERROR`) and FR-007's severity-ranked violation-reporting
+  precedence, but neither had a corresponding behavioral scenario —
+  a zero-coverage gap against Constitution Principle VI. Scenario 11
+  covers the fail-closed requirement directly; the severity-ranking rule
+  is covered by a dedicated unit test task in `tasks.md` (T052a) rather
+  than a new scenario, since it is an internal precedence rule, not a
+  distinct user-observable flow.
+- **Scenario 9** extended to also cover stacked multi-statement input
+  (`MULTIPLE_STATEMENTS_REJECTED`), closing the same class of
+  zero-coverage gap for FR-014's multi-statement-rejection requirement.
+- Success Criteria updated from ten to eleven required passing
+  scenarios.

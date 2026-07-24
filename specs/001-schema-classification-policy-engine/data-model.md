@@ -102,13 +102,16 @@ The versioned, deterministic-enforcement source of truth for one domain.
 | `query_id` | UUID | Correlates enforcement decisions to a single query attempt |
 | `actor_role` | enum: `analyst`, `admin` | From the auth stub at request time |
 | `decision` | enum: `allow`, `block`, `mask`, `classify_auto_approved`, `classify_pending_review`, `classify_approved`, `classify_rejected` | Both enforcement and classification decisions are logged (Principle VIII) |
-| `reason` | str | Human-readable, e.g. `"column blocked by policy: member_ssn"` (Scenario 4) |
-| `policy_version_used` | int \| null | Null only for classification-stage entries where no policy exists yet |
+| `reason_code` | enum \| null: `COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR` | Fixed, versioned reason-code enum for enforcement decisions (FR-010) — never a free-form string alone; null for classification-stage (`classify_*`) decisions, which have no enforcement reason |
+| `reason_message` | str \| null | Human-readable message rendered from the `reason_code`'s template, e.g. `"column blocked by policy: member_ssn"` for `COLUMN_BLOCKED` (Scenario 4); null when `reason_code` is null |
+| `policy_version_used` | int \| null | Null for classification-stage entries where no policy exists yet, and null for an `ENFORCEMENT_ERROR` entry where the failure occurred before a policy version could be resolved |
 | `raw_query_hash` | str \| null | SHA-256 of the executed/rejected SQL text; never the raw PII values themselves |
 
 **Validation rules**:
 - Every enforcement decision (allow/block/mask) MUST produce exactly one
-  `AuditLogEntry` (FR-010).
+  `AuditLogEntry` (FR-010), with `reason_code` set to one of the fixed
+  enum values above and `reason_message` set to that code's rendered
+  template — never a bare free-form string.
 - Every classification status transition MUST produce exactly one
   `AuditLogEntry`, including admin approve/reject/reclassify actions, with
   `actor_role` recording the acting admin (Scenario 8).

@@ -4,11 +4,11 @@
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md (all present)
 
 **Tests**: Included and REQUIRED, not optional — spec.md's Success Criteria states
-"All ten behavioral scenarios above pass as automated tests," and Constitution
+"All eleven behavioral scenarios above pass as automated tests," and Constitution
 Principle VI ("Evaluation Is a Merge Gate") makes the eval suite mandatory for
 milestone completion.
 
-**Organization**: Tasks are grouped by user story, derived from `spec.md`'s 10
+**Organization**: Tasks are grouped by user story, derived from `spec.md`'s 11
 behavioral scenarios, sequenced for incremental delivery. Priorities reflect what
 must exist, in order, for the engine's core guarantee (classify → review → enforce,
 fail closed) to be real and demoable.
@@ -24,6 +24,13 @@ than a blocked one.
 `on_role_mismatch` config (FR-008) it implements, and T072 was added to give
 FR-012 (synthetic-data-only) a dedicated regression safeguard.
 
+**2026-07-24 `/speckit.analyze` remediation**: T048, T053, and T055 now
+name the enforcement-path-failure fail-closed, severity-ranking, and
+multi-statement-rejection requirements added to `spec.md` FR-007/FR-014 on
+2026-07-24 (previously zero task coverage against Constitution Principle
+VI). T057a (BDD, Scenario 11) and T052a (unit test, severity ranking) were
+added, and T066's CI dependency list now includes both.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
@@ -36,7 +43,7 @@ FR-012 (synthetic-data-only) a dedicated regression safeguard.
 |---|---|---|---|
 | US1 | 1, 2, 3 | P1 (MVP) | Heuristic + LLM-assisted classification pipeline with conservative, auditable confidence scoring |
 | US2 | 8 (FR-013) | P1 | Human-review queue + admin-only approval workflow |
-| US3 | 4, 6, 9, 10 | P1 (MVP) | Policy publishing + deterministic column-level enforcement (default-closed, DML-rejecting, schema-mapping-aware) + queryable audit log |
+| US3 | 4, 6, 9, 10, 11 | P1 (MVP) | Policy publishing + deterministic column-level enforcement (default-closed, DML-rejecting, schema-mapping-aware) + queryable audit log |
 | US4 | 5 | P2 | Row-level predicate injection |
 | US5 | 7 | P2 | Role-gated column access |
 
@@ -64,7 +71,7 @@ required to prove the core guardrail claim.
 
 - [ ] T007 Domain config loader (`healthcare`/`fintech` directory convention, FR-011) in `backend/src/config/domains.py`
 - [ ] T008 [P] Postgres `audit_log` table migration (data-model.md#AuditLogEntry) in `backend/src/db/migrations/0001_audit_log.sql`
-- [ ] T009 [P] `structlog` configuration + `AuditLogEntry` model and writer (research.md §8) in `backend/src/services/audit/audit_log.py`
+- [ ] T009 [P] `structlog` configuration + `AuditLogEntry` model and writer, with `reason_code` as a fixed reason-code enum (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR`) plus a rendered `reason_message` (FR-010, research.md §8) in `backend/src/services/audit/audit_log.py`
 - [ ] T010 [P] `Caller`/`Role` model + auth-stub FastAPI dependency parsing `X-Steward-Role`, defaulting to `analyst` (research.md §7) in `backend/src/api/deps.py`
 - [ ] T011 FastAPI app skeleton + router registration in `backend/src/api/main.py` (depends on T010)
 - [ ] T012 [P] Healthcare domain schema + Synthea-derived seed script (research.md §10) in `domains/healthcare/schema.sql`, `domains/healthcare/seed.py`
@@ -152,14 +159,16 @@ off-schema question never touches the database, and every decision is
 queryable in the audit log.
 
 **Independent Test**: Publish a policy, then submit a query referencing a
-`block`-policy column — expect 403 with reason `"column blocked by policy: <col>"`
-(Scenario 4). Submit a query against an unclassified table — expect 403 with
-reason `"schema not yet classified"` (Scenario 6). Submit a `DELETE` statement —
-expect 403 with reason `"DML statement rejected: read-only queries only"`
-(Scenario 9). Ask an off-schema question — expect no SQL execution and a
-`"question not mapped to schema"` response (Scenario 10). Query
-`GET /audit-log` and confirm all of the above decisions appear, filterable
-by domain/time/decision (NFR-004).
+`block`-policy column — expect 403 with `reason_code: COLUMN_BLOCKED`
+(Scenario 4). Submit a query against an unclassified table — expect 403
+with `reason_code: NO_ACTIVE_POLICY` (Scenario 6). Submit a `DELETE`
+statement — expect 403 with `reason_code: DML_REJECTED` (Scenario 9).
+Ask an off-schema question — expect no SQL execution and a 200 with
+`reason_code: QUESTION_NOT_MAPPED` (Scenario 10). Force a policy-load
+failure or an unexpected internal enforcement error — expect 403 with
+`reason_code: ENFORCEMENT_ERROR` (Scenario 11). Query `GET /audit-log`
+and confirm all of the above decisions appear, filterable by
+domain/time/decision (NFR-004).
 
 ### Tests for User Story 3
 
@@ -173,16 +182,18 @@ by domain/time/decision (NFR-004).
 - [ ] T045 [US3] `POST /domains/{domain}/policy/publish` endpoint, admin-only, built from all `approved` classifications (contracts/api.md) in `backend/src/api/policy.py` (depends on T044, T027)
 - [ ] T046 [US3] `GET /domains/{domain}/policy` endpoint in `backend/src/api/policy.py` (depends on T044)
 - [ ] T047 [US3] `sqlglot`-based column resolver: `SELECT *`, joins, CTEs, subqueries → concrete `table.column` (research.md §5) in `backend/src/services/enforcement/column_resolver.py`
-- [ ] T048 [US3] Deterministic enforcement node: `allow`/`block` decision + default-closed for any unresolved or policy-absent column (FR-007, FR-009) in `backend/src/services/enforcement/enforcer.py` (depends on T047, T044)
+- [ ] T048 [US3] Deterministic enforcement node: `allow`/`block` decision + default-closed for any unresolved or policy-absent column (FR-007, FR-009); on policy-load failure or unexpected internal error, reject with reason `ENFORCEMENT_ERROR` (FR-007, Scenario 11); when multiple violations co-occur, report by severity ranking, not AST scan order (FR-007) in `backend/src/services/enforcement/enforcer.py` (depends on T047, T044)
 - [ ] T049 [US3] Minimal SQL proposal step (accepts `question` or raw `sql`, per spec "Out of Scope" — not production NL→SQL quality) in `backend/src/services/generation/sql_proposal.py`
 - [ ] T050 [US3] Query LangGraph graph: generate → deterministic enforce → execute (only if passed) → audit (research.md §9) in `backend/src/graph/query_graph.py` (depends on T048, T049)
 - [ ] T051 [US3] `POST /domains/{domain}/query` endpoint (contracts/api.md) in `backend/src/api/query.py` (depends on T050)
-- [ ] T052 [US3] Enforcement-decision audit logging (allow/block + reason) in `backend/src/services/audit/audit_log.py` (depends on T048)
-- [ ] T053 [P] [US3] BDD step defs for Scenario 9 (DML-attempt statement rejected unconditionally) in `backend/tests/integration/test_scenario9_dml_rejected.py`
+- [ ] T052 [US3] Enforcement-decision audit logging: `decision` (allow/block/mask) + `reason_code` + rendered `reason_message`, per the FR-010 enum (T009) in `backend/src/services/audit/audit_log.py` (depends on T048, T009)
+- [ ] T053 [P] [US3] BDD step defs for Scenario 9 (DML-attempt statement rejected unconditionally, including stacked multi-statement input rejected with reason `MULTIPLE_STATEMENTS_REJECTED`, FR-014) in `backend/tests/integration/test_scenario9_dml_rejected.py`
 - [ ] T054 [P] [US3] BDD step defs for Scenario 10 (irrelevant question does not leak schema or bypass enforcement) in `backend/tests/integration/test_scenario10_irrelevant_question.py`
-- [ ] T055 [US3] DML/non-`SELECT` statement guard: reject any statement whose `sqlglot`-parsed root is not a `SELECT`, before any column/table policy check (FR-014, research.md §5) in `backend/src/services/enforcement/enforcer.py` (depends on T047)
+- [ ] T055 [US3] DML/non-`SELECT` statement guard: reject any statement whose `sqlglot`-parsed root is not a single `SELECT`, including input that parses into more than one statement (reason `MULTIPLE_STATEMENTS_REJECTED`), before any column/table policy check (FR-014, research.md §5) in `backend/src/services/enforcement/enforcer.py` (depends on T047)
 - [ ] T056 [US3] Irrelevant-question handling in the query graph: no schema-relevant mapping → return `"question not mapped to schema"` without generating or executing SQL (FR-014, Scenario 10) in `backend/src/graph/query_graph.py` (depends on T050)
 - [ ] T057 [US3] `GET /audit-log` endpoint with domain/time-range/decision-type filters (contracts/api.md, NFR-004) in `backend/src/api/audit.py` (depends on T008, T009)
+- [ ] T057a [P] [US3] BDD step defs for Scenario 11 (enforcement-path failure fails closed, reason `ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario11_enforcement_error.py`
+- [ ] T052a [US3] Unit test: when a query trips multiple independent policy violations simultaneously, the reported reason follows FR-007's severity ranking (`ENFORCEMENT_ERROR`/`NO_ACTIVE_POLICY`/`COLUMN_BLOCKED` > `ROLE_GATE_MISMATCH` > row-policy injection), not AST scan order in `backend/tests/unit/test_enforcement_severity_ranking.py` (depends on T048)
 
 **Checkpoint**: US1 + US2 + US3 complete — this is the MVP. The core Constitution Principle I/II/VIII guarantee (classify, review, enforce-closed, DML-safe, auditable) is fully demoable.
 
@@ -204,7 +215,7 @@ predicate and never returns cross-tenant rows (Scenario 5).
 
 ### Implementation for User Story 4
 
-- [ ] T059 [US4] Row-predicate injector: AST-level `WHERE`-clause manipulation, not string concatenation (research.md §5.3) in `backend/src/services/enforcement/row_predicate_injector.py` (depends on T047)
+- [ ] T059 [US4] Row-predicate injector: AST-level `WHERE`-clause manipulation, not string concatenation; AND-merges the policy predicate with any existing `WHERE` clause the LLM's SQL already contains, never overwriting or stripping it (research.md §5.3, Scenario 5) in `backend/src/services/enforcement/row_predicate_injector.py` (depends on T047)
 - [ ] T060 [US4] Wire row-predicate injection into the enforcement node in `backend/src/services/enforcement/enforcer.py` (depends on T048, T059)
 - [ ] T061 [US4] Add `tenant_id` `row_policy_template` to the fintech policy artifact in `policies/fintech/<version>/policy.yaml` (depends on T044)
 
@@ -230,14 +241,14 @@ excluded, per FR-008 configuration) for a caller without the required role
 - [ ] T063 [US5] `role_gate` enforcement branch in the enforcement node, checked against the caller's role from the auth stub, honoring the column's `on_role_mismatch` setting (`reject` by default, `exclude` if explicitly configured; FR-008) in `backend/src/services/enforcement/enforcer.py` (depends on T048)
 - [ ] T064 [US5] Finalize the `diagnosis_code` gated-role config (`roles: [admin]`, per spec.md Scenario 7 as corrected on 2026-07-23) in `policies/healthcare/<version>/policy.yaml` (depends on T044)
 
-**Checkpoint**: All 5 user stories independently functional — all 10 `spec.md` scenarios have a corresponding passing test.
+**Checkpoint**: All 5 user stories independently functional — all 11 `spec.md` scenarios have a corresponding passing test.
 
 ---
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
 - [ ] T065 [P] Update `README.md` with setup + quickstart pointers
-- [ ] T066 GitHub Actions CI: run the full `pytest-bdd` suite + `classifier_eval.py` on every PR, failing eval blocks merge (Constitution Principle VI) in `.github/workflows/ci.yml` (depends on T006, T030, T015-T017, T031, T041-T042, T053-T054, T058, T062)
+- [ ] T066 GitHub Actions CI: run the full `pytest-bdd` suite + `classifier_eval.py` on every PR, failing eval blocks merge (Constitution Principle VI) in `.github/workflows/ci.yml` (depends on T006, T030, T015-T017, T031, T041-T042, T053-T054, T057a, T052a, T058, T062)
 - [ ] T067 [P] Cross-domain regression check: assert zero domain-specific conditionals in engine source (FR-011, Success Criteria) in `backend/tests/unit/test_no_domain_conditionals.py`
 - [ ] T068 [P] NFR-001 timing test: 50-table schema classifies end-to-end in under 5 minutes in `backend/tests/integration/test_nfr001_classification_latency.py`
 - [ ] T069 [P] NFR-002 latency test: enforcement check adds ≤200ms per query in `backend/tests/integration/test_nfr002_enforcement_latency.py`
@@ -281,7 +292,7 @@ developers.
 - All `[P]`-marked Foundational tasks (T008–T010, T012–T013) in parallel.
 - Within US1: T015–T017 (tests), and T018/T020/T021 (independent files) in parallel.
 - Within US2: T037–T038 (frontend files) in parallel with backend T032–T036.
-- Within US3: T041–T042 and T053–T054 (tests), and T043, in parallel.
+- Within US3: T041–T042, T053–T054, and T057a (tests), and T043, in parallel.
 - Within Polish: T065, T067–T070, T072 in parallel.
 
 ---
@@ -330,7 +341,7 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
 ## Notes
 
 - `[P]` tasks touch different files with no unmet dependencies.
-- `[Story]` labels map every implementation task to one of spec.md's 10 scenarios for traceability.
+- `[Story]` labels map every implementation task to one of spec.md's 11 scenarios for traceability.
 - T053–T057 and the corrected T064 were added/updated on 2026-07-23 following
   `/speckit.analyze`: the prior version of this file had zero task coverage for
   DML-attempt/irrelevant-question eval (Constitution Principle VI) and for the
