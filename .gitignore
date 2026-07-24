@@ -172,3 +172,17 @@ cython_debug/
 .pypirc
 
 *.db
+# === GitHub Spec Kit ===
+.genreleases/
+*.zip
+sdd-*/
+docs/dev
+.specify/feature.json
+.specify/extensions/.cache/
+.specify/extensions/.backup/
+.specify/extensions/*/local-config.yml
+
+# === Claude Code ===
+.claude/
+claude_*.log
+claude-session-*/

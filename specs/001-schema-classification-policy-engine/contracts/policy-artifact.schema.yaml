@@ -1,0 +1,50 @@
+# Contract: shape every policy artifact YAML file must conform to.
+# Path convention: policies/<domain>/<version>/policy.yaml
+# Active-version pointer: policies/<domain>/manifest.yaml
+#
+# This is the external, versioned artifact referenced by Constitution
+# Principle IV ("One Engine, Many Policies") — domain-specific knowledge
+# lives here, never in engine source. See data-model.md#PolicyArtifact.
+
+domain: healthcare              # string, must match a configured domain (FR-011)
+version: 3                      # int, monotonically increasing per domain
+approved_by: "admin@example"    # string, identity of the admin who published this version
+approved_at: "2026-07-23T14:00:00Z"  # ISO-8601 timestamp
+
+tables:
+  - table_name: patients
+    row_policy_template: null   # no row-level predicate for this table
+    columns:
+      patient_ssn:
+        action: block           # allow | block | role_gate
+        roles: []                # required non-empty only when action == role_gate
+        classification: pii_direct
+      patient_notes:
+        action: block
+        roles: []
+        classification: sensitive_category
+      diagnosis_code:
+        action: role_gate
+        roles: [admin]           # Scenario 7 — visible only to listed roles;
+                                  # rejected for analyst, allowed for admin.
+        on_role_mismatch: reject  # reject | exclude; reject is the default (FR-008)
+        classification: sensitive_category
+      patient_id:
+        action: allow
+        roles: []
+        classification: business
+
+  - table_name: claims
+    row_policy_template: "tenant_id = :current_tenant"   # Scenario 5 — injected deterministically
+    columns:
+      member_ssn:
+        action: block
+        roles: []
+        classification: pii_direct
+      claim_amount:
+        action: allow
+        roles: []
+        classification: business
+
+# Any table or column NOT listed above is implicitly `block` (FR-009,
+# Scenario 6) — omission is a deliberate deny, not an oversight to patch.
