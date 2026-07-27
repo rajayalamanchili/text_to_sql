@@ -56,7 +56,7 @@ required to prove the core guardrail claim.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create backend Python project (`uv`, `pyproject.toml`, FastAPI/LangGraph/sqlglot/Pydantic/structlog deps) per `plan.md` structure in `backend/`
+- [X] T001 Create backend Python project (`uv`, `pyproject.toml`, FastAPI/LangGraph/sqlglot/Pydantic/structlog deps) per `plan.md` structure in `backend/`
 - [ ] T002 Create frontend Next.js (TypeScript, Tailwind) project per `plan.md` structure in `frontend/`
 - [ ] T003 [P] Configure Python linting/formatting (ruff) in `backend/pyproject.toml`
 - [ ] T004 [P] Configure TypeScript linting/formatting (eslint/prettier) in `frontend/`

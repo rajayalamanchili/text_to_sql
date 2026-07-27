@@ -165,16 +165,19 @@ backend/
 │   │   └── enforcement/     # sqlglot-based column check + row-predicate injection
 │   ├── graph/              # LangGraph definitions: classification_graph.py, query_graph.py
 │   └── api/                # FastAPI routers: schema, review_queue, policy, query, audit
-├── policies/               # versioned YAML policy artifacts, one dir per domain
-│   ├── healthcare/
-│   └── fintech/
-├── domains/                # domain config + synthetic data generation (no engine logic)
-│   ├── healthcare/          # Synthea-derived schema.sql + seed script
-│   └── fintech/             # Faker/PaySim-style schema.sql + seed script
 └── tests/
     ├── contract/            # API contract tests
     ├── integration/          # pytest-bdd step defs for the 11 spec.md scenarios
     └── unit/                 # heuristic classifier, confidence combination, sqlglot enforcement
+
+policies/                  # versioned YAML policy artifacts, one dir per domain (repo root,
+├── healthcare/            # not nested under backend/ — a diffable-via-PR governance
+└── fintech/                # artifact per tech-stack.md, referenced without a backend/
+                             # prefix throughout tasks.md/research.md §6/contracts/)
+
+domains/                   # domain config + synthetic data generation (no engine logic)
+├── healthcare/             # Synthea-derived schema.sql + seed script
+└── fintech/                # Faker/PaySim-style schema.sql + seed script
 
 frontend/
 ├── src/

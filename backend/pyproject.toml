@@ -1,0 +1,13 @@
+[project]
+name = "steward-backend"
+version = "0.1.0"
+description = "Steward Milestone 1: schema classification & policy enforcement engine"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.140.0",
+    "langgraph>=1.2.9",
+    "pydantic>=2",
+    "sqlglot>=30.13.0",
+    "structlog>=26.1.0",
+    "uvicorn[standard]>=0.51.0",
+]
