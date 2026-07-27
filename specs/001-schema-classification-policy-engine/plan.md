@@ -119,6 +119,25 @@ added in `tasks.md` (T057a, T052a) — tracked as **CRITICAL** findings C1–C3
 in the 2026-07-24 `/speckit.analyze` report until that coverage existed;
 that coverage is now in place.
 
+**Post-Clarify Re-check (2026-07-27)**: `/speckit.clarify` added four more
+requirements to `spec.md`: FR-008's `X-Steward-Tenant` header for
+`current_tenant` resolution (fail-closed `ENFORCEMENT_ERROR` if
+absent/malformed), FR-008's fail-closed rule for a `role_gate`/`exclude`
+column referenced only inside an aggregate expression, FR-007's
+policy-version-pinning guarantee for in-flight queries, and NFR-002's
+measurement methodology (p95, single query, no load) plus its
+runtime-timeout posture (a measured SLO, not a request-path cutoff). None
+of these introduce a new architectural component, an LLM call in the
+enforcement path, or an unbounded loop — they extend the existing auth
+stub (research.md §7), enforcement node, and manifest-based version
+resolution (research.md §6) already described in this plan. All ten
+principles above still hold; Principle I/II are strengthened (tenant
+resolution now has an explicit fail-closed path rather than an undefined
+one). A follow-on `/speckit.analyze` pass found the tenant-header and
+version-pinning requirements had zero task coverage (findings G1, G2,
+tracked as CRITICAL/HIGH) — `tasks.md` T010, T044a, T058, and T059 were
+updated/added to close them.
+
 ## Project Structure
 
 ### Documentation (this feature)

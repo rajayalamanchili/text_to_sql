@@ -72,7 +72,7 @@ required to prove the core guardrail claim.
 - [ ] T007 Domain config loader (`healthcare`/`fintech` directory convention, FR-011) in `backend/src/config/domains.py`
 - [ ] T008 [P] Postgres `audit_log` table migration (data-model.md#AuditLogEntry) in `backend/src/db/migrations/0001_audit_log.sql`
 - [ ] T009 [P] `structlog` configuration + `AuditLogEntry` model and writer, with `reason_code` as a fixed reason-code enum (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR`) plus a rendered `reason_message` (FR-010, research.md §8) in `backend/src/services/audit/audit_log.py`
-- [ ] T010 [P] `Caller`/`Role` model + auth-stub FastAPI dependency parsing `X-Steward-Role`, defaulting to `analyst` (research.md §7) in `backend/src/api/deps.py`
+- [ ] T010 [P] `Caller`/`Role` model + auth-stub FastAPI dependency parsing `X-Steward-Role` (defaulting to `analyst`) and `X-Steward-Tenant` (data-model.md#Caller, research.md §7) in `backend/src/api/deps.py`
 - [ ] T011 FastAPI app skeleton + router registration in `backend/src/api/main.py` (depends on T010)
 - [ ] T012 [P] Healthcare domain schema + Synthea-derived seed script (research.md §10) in `domains/healthcare/schema.sql`, `domains/healthcare/seed.py`
 - [ ] T013 [P] Fintech domain schema + Faker/PaySim-style seed script (research.md §10) in `domains/fintech/schema.sql`, `domains/fintech/seed.py`
@@ -179,6 +179,7 @@ domain/time/decision (NFR-004).
 
 - [ ] T043 [P] [US3] `PolicyArtifact`/`PolicyTable`/`PolicyColumn` Pydantic models (data-model.md) in `backend/src/models/policy_artifact.py`
 - [ ] T044 [US3] Policy store: versioned YAML read/write + manifest-based active-version resolution (research.md §6) in `backend/src/services/policy/policy_store.py` (depends on T043)
+- [ ] T044a [US3] Unit test: a policy publish occurring mid-evaluation of an in-flight query does not affect that query's resolved policy version — the version is read once at the start of enforcement and reused for every check (FR-007) in `backend/tests/unit/test_policy_version_pinning.py` (depends on T044, T048)
 - [ ] T045 [US3] `POST /domains/{domain}/policy/publish` endpoint, admin-only, built from all `approved` classifications (contracts/api.md) in `backend/src/api/policy.py` (depends on T044, T027)
 - [ ] T046 [US3] `GET /domains/{domain}/policy` endpoint in `backend/src/api/policy.py` (depends on T044)
 - [ ] T047 [US3] `sqlglot`-based column resolver: `SELECT *`, joins, CTEs, subqueries → concrete `table.column` (research.md §5) in `backend/src/services/enforcement/column_resolver.py`
@@ -211,11 +212,11 @@ predicate and never returns cross-tenant rows (Scenario 5).
 
 ### Tests for User Story 4
 
-- [ ] T058 [P] [US4] BDD step defs for Scenario 5 (row-level policy applied regardless of LLM predicates) in `backend/tests/integration/test_scenario5_row_policy.py`
+- [ ] T058 [P] [US4] BDD step defs for Scenario 5 (row-level policy applied regardless of LLM predicates, including the fail-closed case where `X-Steward-Tenant` is absent/malformed for a tenant-scoped table, expecting `reason_code: ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario5_row_policy.py`
 
 ### Implementation for User Story 4
 
-- [ ] T059 [US4] Row-predicate injector: AST-level `WHERE`-clause manipulation, not string concatenation; AND-merges the policy predicate with any existing `WHERE` clause the LLM's SQL already contains, never overwriting or stripping it (research.md §5.3, Scenario 5) in `backend/src/services/enforcement/row_predicate_injector.py` (depends on T047)
+- [ ] T059 [US4] Row-predicate injector: AST-level `WHERE`-clause manipulation, not string concatenation; AND-merges the policy predicate with any existing `WHERE` clause the LLM's SQL already contains, never overwriting or stripping it; binds `:current_tenant` from `Caller.tenant_id` (T010), rejecting with `ENFORCEMENT_ERROR` if the table requires it and it's absent/malformed (research.md §5.3, spec.md FR-008, Scenario 5) in `backend/src/services/enforcement/row_predicate_injector.py` (depends on T047, T010)
 - [ ] T060 [US4] Wire row-predicate injection into the enforcement node in `backend/src/services/enforcement/enforcer.py` (depends on T048, T059)
 - [ ] T061 [US4] Add `tenant_id` `row_policy_template` to the fintech policy artifact in `policies/fintech/<version>/policy.yaml` (depends on T044)
 
@@ -248,10 +249,10 @@ excluded, per FR-008 configuration) for a caller without the required role
 ## Phase 8: Polish & Cross-Cutting Concerns
 
 - [ ] T065 [P] Update `README.md` with setup + quickstart pointers
-- [ ] T066 GitHub Actions CI: run the full `pytest-bdd` suite + `classifier_eval.py` on every PR, failing eval blocks merge (Constitution Principle VI) in `.github/workflows/ci.yml` (depends on T006, T030, T015-T017, T031, T041-T042, T053-T054, T057a, T052a, T058, T062)
+- [ ] T066 GitHub Actions CI: run the full `pytest-bdd` suite + `classifier_eval.py` on every PR, failing eval blocks merge (Constitution Principle VI) in `.github/workflows/ci.yml` (depends on T006, T030, T015-T017, T031, T041-T042, T053-T054, T057a, T052a, T044a, T058, T062)
 - [ ] T067 [P] Cross-domain regression check: assert zero domain-specific conditionals in engine source (FR-011, Success Criteria) in `backend/tests/unit/test_no_domain_conditionals.py`
 - [ ] T068 [P] NFR-001 timing test: 50-table schema classifies end-to-end in under 5 minutes in `backend/tests/integration/test_nfr001_classification_latency.py`
-- [ ] T069 [P] NFR-002 latency test: enforcement check adds ≤200ms per query in `backend/tests/integration/test_nfr002_enforcement_latency.py`
+- [ ] T069 [P] NFR-002 latency test: p95 enforcement-check latency ≤200ms, measured over single-query/no-concurrent-load runs (spec.md NFR-002) in `backend/tests/integration/test_nfr002_enforcement_latency.py`
 - [ ] T070 [P] Security test: assert the masking utility never emits raw sample values into an LLM prompt (FR-003, Principle I) in `backend/tests/unit/test_masking_no_raw_values.py`
 - [ ] T071 Run `quickstart.md` validation end-to-end (including Scenarios 9, 10, and the `GET /audit-log` walkthrough) and record results
 - [ ] T072 [P] Synthetic-data safeguard test: assert `domains/healthcare/seed.py` and `domains/fintech/seed.py` only construct data via the checked-in Synthea/Faker generators and never read a non-local or externally-supplied connection string (FR-012, Constitution Principle VII) in `backend/tests/unit/test_synthetic_data_only.py`

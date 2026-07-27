@@ -101,7 +101,7 @@ The versioned, deterministic-enforcement source of truth for one domain.
 | `domain` | str | |
 | `query_id` | UUID | Correlates enforcement decisions to a single query attempt |
 | `actor_role` | enum: `analyst`, `admin` | From the auth stub at request time |
-| `decision` | enum: `allow`, `block`, `mask`, `classify_auto_approved`, `classify_pending_review`, `classify_approved`, `classify_rejected` | Both enforcement and classification decisions are logged (Principle VIII) |
+| `decision` | enum: `allow`, `block`, `mask`, `classify_auto_approved`, `classify_pending_review`, `classify_approved`, `classify_rejected` | Both enforcement and classification decisions are logged (Principle VIII). `mask` is reserved for a future milestone — Milestone 1's policy actions are `allow`/`block`/`role_gate` only (FR-008), so no enforcement path produces `mask` yet. |
 | `reason_code` | enum \| null: `COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR` | Fixed, versioned reason-code enum for enforcement decisions (FR-010) — never a free-form string alone; null for classification-stage (`classify_*`) decisions, which have no enforcement reason |
 | `reason_message` | str \| null | Human-readable message rendered from the `reason_code`'s template, e.g. `"column blocked by policy: member_ssn"` for `COLUMN_BLOCKED` (Scenario 4); null when `reason_code` is null |
 | `policy_version_used` | int \| null | Null for classification-stage entries where no policy exists yet, and null for an `ENFORCEMENT_ERROR` entry where the failure occurred before a policy version could be resolved |
@@ -124,6 +124,7 @@ The versioned, deterministic-enforcement source of truth for one domain.
 | Field | Type | Notes |
 |---|---|---|
 | `role` | enum: `analyst`, `admin` | Parsed from `X-Steward-Role` header; defaults to `analyst` if missing/invalid (research.md §7) |
+| `tenant_id` | str \| null | Parsed from `X-Steward-Tenant` header; required only when the query touches a table whose `row_policy_template` references `:current_tenant` — if absent/malformed there, enforcement rejects with `ENFORCEMENT_ERROR` (spec.md FR-008, Scenario 5) |
 
 Not persisted — constructed per-request by a FastAPI dependency. Full
 identity/auth integration is out of scope for Milestone 1 (spec "Out of

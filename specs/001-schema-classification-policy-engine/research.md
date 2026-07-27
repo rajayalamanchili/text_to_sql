@@ -133,8 +133,14 @@ open (the "how", where the spec defines the "what").
   dependency parses it into a typed `Caller` object. A missing or invalid
   header defaults to `analyst` (the more restrictive role, no
   review-approval rights) — fail closed, consistent with Principle II
-  applied to auth as well as data.
-- **Alternatives considered**: Defaulting an absent header to `admin`
+  applied to auth as well as data. The same dependency also parses an
+  `X-Steward-Tenant` header into `Caller.tenant_id`, used to resolve the
+  `:current_tenant` placeholder in a table's `row_policy_template` (§5,
+  Scenario 5). Unlike the role header, there is no safe default value to
+  fall back to for tenant — if a query touches a tenant-scoped table and
+  the header is absent or malformed, enforcement rejects with
+  `ENFORCEMENT_ERROR` rather than guessing a tenant.
+- **Alternatives considered**: Defaulting an absent role header to `admin`
   (rejected outright — violates fail-closed default).
 
 ## 8. Audit log shape and querying (FR-010, NFR-004)

@@ -13,6 +13,7 @@ Milestone-1-configured domains (FR-011). All endpoints require the
 | Header | Values | Behavior if missing/invalid |
 |---|---|---|
 | `X-Steward-Role` | `analyst`, `admin` | Defaults to `analyst` (fail closed) |
+| `X-Steward-Tenant` | any non-empty string | Only required for queries touching a table whose `row_policy_template` references `:current_tenant`; if absent/malformed for such a table, the query is rejected with `reason_code: ENFORCEMENT_ERROR` (spec.md FR-008, Scenario 5) |
 
 ## Schema enumeration & classification pipeline
 
