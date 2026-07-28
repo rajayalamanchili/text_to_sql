@@ -61,7 +61,7 @@ required to prove the core guardrail claim.
 - [X] T003 [P] Configure Python linting/formatting (ruff) in `backend/pyproject.toml`
 - [X] T004 [P] Configure TypeScript linting/formatting (eslint/prettier) in `frontend/`
 - [X] T005 Docker Compose config for 2× Postgres (healthcare, fintech), backend, frontend in `docker-compose.yml`
-- [ ] T006 [P] GitHub Actions CI skeleton in `.github/workflows/ci.yml`
+- [X] T006 [P] GitHub Actions CI skeleton in `.github/workflows/ci.yml`
 
 ---
 
