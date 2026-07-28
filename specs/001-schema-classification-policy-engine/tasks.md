@@ -70,8 +70,8 @@ required to prove the core guardrail claim.
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
 - [X] T007 Domain config loader (`healthcare`/`fintech` directory convention, FR-011) in `backend/src/config/domains.py`
-- [ ] T008 [P] Postgres `audit_log` table migration (data-model.md#AuditLogEntry) in `backend/src/db/migrations/0001_audit_log.sql`
-- [ ] T009 [P] `structlog` configuration + `AuditLogEntry` model and writer, with `reason_code` as a fixed reason-code enum (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR`) plus a rendered `reason_message` (FR-010, research.md §8) in `backend/src/services/audit/audit_log.py`
+- [X] T008 [P] Postgres `audit_log` table migration (data-model.md#AuditLogEntry) in `backend/src/db/migrations/0001_audit_log.sql`
+- [X] T009 [P] `structlog` configuration + `AuditLogEntry` model and writer, with `reason_code` as a fixed reason-code enum (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR`) plus a rendered `reason_message` (FR-010, research.md §8) in `backend/src/services/audit/audit_log.py`
 - [ ] T010 [P] `Caller`/`Role` model + auth-stub FastAPI dependency parsing `X-Steward-Role` (defaulting to `analyst`) and `X-Steward-Tenant` (data-model.md#Caller, research.md §7) in `backend/src/api/deps.py`
 - [ ] T011 FastAPI app skeleton + router registration in `backend/src/api/main.py` (depends on T010)
 - [ ] T012 [P] Healthcare domain schema + Synthea-derived seed script (research.md §10) in `domains/healthcare/schema.sql`, `domains/healthcare/seed.py`
