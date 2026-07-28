@@ -171,7 +171,11 @@ column- or table-level policy was actually violated.
 - **FR-007**: The system MUST provide a policy enforcement component that
   loads the active policy artifact for a domain and deterministically
   evaluates every generated SQL query against it before execution —
-  independent of any LLM-reported metadata about that query. If the
+  independent of any LLM-reported metadata about that query. For
+  Milestone 1, "the active policy artifact" for a domain is always the
+  most recently published version — publishing always advances the
+  domain's active-version pointer forward; there is no rollback-to-an-
+  earlier-version action in this milestone. If the
   active policy artifact cannot be loaded, or the enforcement component
   encounters an unexpected internal error while evaluating a query, the
   query MUST be rejected (fail closed) and logged with reason
@@ -193,6 +197,21 @@ column- or table-level policy was actually violated.
   log's `policy_version_used`; a policy publish that occurs while a
   query is mid-evaluation MUST NOT affect that in-flight query — the
   next query to arrive is the first to see the newly published version.
+  Every rejection produced by this component or by FR-008/FR-009/FR-014
+  (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`,
+  `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`,
+  `ENFORCEMENT_ERROR`) is surfaced to the API caller as HTTP `403
+  Forbidden` with a JSON body of `{reason_code, reason_message,
+  query_id}` — one consistent contract regardless of which reason
+  applies. Scenario 10's `QUESTION_NOT_MAPPED` case is a distinct,
+  non-rejection outcome (no policy was violated; the question simply
+  didn't map to the schema) and instead returns HTTP `200` with the same
+  `{reason_code, reason_message, query_id}` body shape. Deterministic
+  column resolution (used by the no-active-policy check, the role_gate
+  check, and row-policy predicate injection alike) MUST correctly resolve
+  columns referenced through joins, CTEs, subqueries, and `SELECT *`
+  expansion, not only a flat single-table `SELECT` — this is a tested
+  guarantee, not best-effort, per Success Criteria.
 - **FR-008**: The policy enforcement component MUST support at minimum
   these actions per column: `allow`, `block`, `role_gate` (visible only to
   specified roles), and per table: row-level predicate injection. For
@@ -201,7 +220,12 @@ column- or table-level policy was actually violated.
   (full query access, plus review-queue approval authority per FR-013).
   A user's role is supplied via a simple auth stub (e.g., a request
   header or config value) — full identity/auth integration is out of
-  scope for this milestone. When a caller's role does not satisfy a
+  scope for this milestone. Any `X-Steward-Role` value outside the fixed
+  `{analyst, admin}` enum — whether the header is missing entirely or
+  present with an unrecognized value (e.g. `superuser`) — is treated
+  identically: it defaults to `analyst`, the more restrictive role, per
+  the same fail-closed rationale as FR-009. There is no separate
+  "invalid role value" error path. When a caller's role does not satisfy a
   column's `role_gate`, the enforcement component's behavior is controlled
   by a per-policy-column setting, `on_role_mismatch: reject | exclude`,
   defaulting to `reject` (the whole query is rejected, consistent with
@@ -224,7 +248,16 @@ column- or table-level policy was actually violated.
   rather than silently rewriting the expression, since doing so would
   change the aggregate's meaning without the caller's knowledge.
 - **FR-009**: The system MUST reject any query referencing a table or
-  column that has no active approved policy, defaulting closed.
+  column that has no active approved policy, defaulting closed. This
+  default-closed check applies at column granularity, not whole-schema
+  granularity: for a partially classified schema (some columns
+  `approved`/`auto_approved`, others still `pending_review`), a query
+  touching only approved columns MUST still be evaluated normally
+  (`allow`/`block`/`role_gate` per FR-008); a query touching any column
+  absent from the published policy artifact — including one still
+  `pending_review` — MUST be rejected with `reason_code: NO_ACTIVE_POLICY`
+  for that column, without requiring the entire schema to reach 100%
+  classification first.
 - **FR-010**: The system MUST log every classification decision and every
   enforcement decision (allow/block/mask, and why) in a queryable audit
   log. `mask` is reserved for a future milestone — Milestone 1's policy
@@ -321,7 +354,11 @@ table's row-policy template, tenant_id, both from FR-008's auth stub) and
 - Full identity/auth integration (SSO, real user management). Milestone 1
   uses a role stub (a request header or config value asserting the
   caller's role) — sufficient to prove the enforcement logic, not
-  production authentication.
+  production authentication. The stub's header values (`X-Steward-Role`,
+  `X-Steward-Tenant`) are assumed trustworthy and unspoofed for this
+  milestone; no signature, session, or identity-provider verification
+  guards them — that hardening belongs to the out-of-scope "real auth
+  integration" item above, not to this milestone's enforcement guarantee.
 
 ## Success Criteria
 
@@ -331,6 +368,11 @@ table's row-policy template, tenant_id, both from FR-008's auth stub) and
   on `pii_direct` classifications specifically, since false negatives
   there are the highest-consequence error).
 - All eleven behavioral scenarios above pass as automated tests.
+- Deterministic column resolution is separately tested against joins,
+  CTEs, subqueries, and `SELECT *` expansion (not only the flat-query
+  shapes the eleven scenarios happen to use) for each of: the
+  no-active-policy check, the `role_gate` check, and row-policy predicate
+  injection.
 - The same engine codebase runs both the healthcare and fintech domain
   configurations with no domain-specific conditionals in engine source
   files.
@@ -495,6 +537,59 @@ expressions; FR-007 gained an explicit policy-version-pinning guarantee
 for in-flight queries; and NFR-002 gained both a defined runtime-timeout
 posture (measured SLO, not a request-path cutoff) and a concrete
 measurement methodology.
+
+### Session 2026-07-28
+
+- **Q: For a schema that's partially classified (some columns approved,
+  others still pending_review), does FR-009's default-closed rule apply
+  at column granularity within an otherwise-active policy?**
+  **A**: Yes, column granularity. Approved/auto_approved columns remain
+  enforceable per FR-008 (`allow`/`block`/`role_gate`); any column absent
+  from the published artifact — including one still `pending_review` — is
+  implicitly `block` for that column alone, without gating the rest of an
+  otherwise-published schema. Affects FR-009.
+
+- **Q: When multiple approved policy versions exist for a domain, which
+  one is "the active policy artifact" FR-007 refers to — always the
+  latest, or can an admin roll back to an earlier version?**
+  **A**: Always the most recently published version. No rollback action
+  exists in Milestone 1; the manifest pointer only ever advances forward
+  on publish. Affects FR-007.
+
+- **Q: Should every enforcement-path rejection share one consistent HTTP
+  response contract, and how should Scenario 10's "question not mapped"
+  case be treated?**
+  **A**: Uniform 403 + 200 split. Every enforcement rejection
+  (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`,
+  `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`,
+  `ENFORCEMENT_ERROR`) returns HTTP 403 with body
+  `{reason_code, reason_message, query_id}`. `QUESTION_NOT_MAPPED`
+  (Scenario 10) returns HTTP 200 with the same body shape, since it is a
+  routing miss, not a policy violation. Affects FR-007.
+
+- **Q: How much SQL structural complexity must deterministic column
+  resolution provably handle in Milestone 1 — flat SELECT only, or
+  joins/CTEs/subqueries/SELECT * too, with dedicated test coverage?**
+  **A**: Full support, tested. Joins, CTEs, subqueries, and `SELECT *`
+  must all resolve to concrete `table.column` for the no-active-policy
+  check, the `role_gate` check, and row-policy injection alike, and the
+  eval/BDD suite must include dedicated coverage per shape, not only the
+  flat-query examples the eleven scenarios happen to use. Affects FR-007,
+  Success Criteria.
+
+- **Q: What happens when `X-Steward-Role` is present but holds a value
+  other than `analyst`/`admin`, as distinct from the header being
+  absent?**
+  **A**: Treated identically to a missing header — defaults to
+  `analyst`. No separate "invalid role value" error path exists. Affects
+  FR-008.
+
+**Impact of this session**: FR-007, FR-008, and FR-009 each gained an
+explicit rule closing a gap `security.md`'s pre-implementation checklist
+had flagged (partial-classification column granularity, active-policy-
+version resolution, the enforcement HTTP response contract, deterministic
+column-resolution scope, and unrecognized-role handling); Success Criteria
+gained a dedicated column-resolution test-coverage requirement.
 
 ## Amendments
 

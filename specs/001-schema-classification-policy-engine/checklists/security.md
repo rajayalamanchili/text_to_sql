@@ -25,13 +25,15 @@ spec/plan/contracts, not as test steps against running code.
   - Resolved 2026-07-24: FR-014 now rejects any multi-statement input unconditionally, reason `MULTIPLE_STATEMENTS_REJECTED`.
 - [x] CHK004 Is there a requirement covering how `current_tenant` (used in row-policy predicate injection) is resolved from the caller/auth stub, and what happens if it is absent or malformed for a domain whose policy requires it? [Gap, Spec §FR-008, Key Entities: Caller]
   - Resolved 2026-07-27: FR-008 and Scenario 5 now specify the `X-Steward-Tenant` header, fail-closed with `ENFORCEMENT_ERROR` if absent/malformed (Clarifications, Session 2026-07-27).
-- [ ] CHK005 Is a requirement defined for the caller's role being present but unrecognized (neither `analyst` nor `admin`) in the auth-stub header, as distinct from the role being absent? [Gap, Spec §FR-008]
+- [x] CHK005 Is a requirement defined for the caller's role being present but unrecognized (neither `analyst` nor `admin`) in the auth-stub header, as distinct from the role being absent? [Gap, Spec §FR-008]
+  - Resolved 2026-07-28: FR-008 now states an unrecognized value is treated identically to a missing header — defaults to `analyst` (Clarifications, Session 2026-07-28).
 - [x] CHK006 Is there a requirement establishing an overall enforcement pipeline order (e.g., DML/read-only check → schema-mapping check → default-closed/no-policy check → column policy check → role-gate check → row-policy injection) so precedence is unambiguous across scenarios, rather than only implied by per-scenario examples? [Gap, Spec §FR-007, FR-008, FR-009, FR-014]
   - Resolved 2026-07-24: FR-014 keeps DML/schema-mapping structurally first; FR-007 defines a severity ranking (not scan order) for column/table-level violations (Clarifications, Session 2026-07-24).
 
 ## Requirement Clarity
 
-- [ ] CHK007 Is "active policy artifact" (FR-007) defined precisely enough to resolve which version is active when multiple approved policy versions exist for a domain (e.g., latest vs. an explicit rollback target)? [Clarity, Spec §FR-007]
+- [x] CHK007 Is "active policy artifact" (FR-007) defined precisely enough to resolve which version is active when multiple approved policy versions exist for a domain (e.g., latest vs. an explicit rollback target)? [Clarity, Spec §FR-007]
+  - Resolved 2026-07-28: FR-007 now states the active version is always the most recently published one; no rollback action exists in M1 (Clarifications, Session 2026-07-28).
 - [x] CHK008 Are the audit-log "reason" strings (e.g., "column blocked by policy: member_ssn", "schema not yet classified", "DML statement rejected: read-only queries only") specified as a fixed, enumerable reason-code scheme, or only as illustrative example text per scenario? [Clarity, Spec §FR-010, Scenarios 4/6/9/10]
   - Resolved 2026-07-24: FR-010 and Key Entities now mandate a fixed reason-code enum (Clarifications, Session 2026-07-24).
 - [ ] CHK009 Is "cannot be mapped to any table in the domain's active policy" (FR-014, Scenario 10) defined with enough precision to be testable, given that SQL-generation/mapping quality is explicitly out of scope for this milestone? [Ambiguity, Spec §FR-014, Out of Scope]
@@ -41,7 +43,8 @@ spec/plan/contracts, not as test steps against running code.
 
 - [x] CHK011 Do FR-008's `on_role_mismatch: reject | exclude` default and FR-009's default-closed rule agree on precedence when a query touches both a no-policy column and a role-gated column in the same statement? [Consistency, Spec §FR-008, FR-009]
   - Resolved 2026-07-24: severity ranking in FR-007 (no-active-policy/`block`/`enforcement_error` rank above `role_gate`) resolves this precedence.
-- [ ] CHK012 Is the response contract for enforcement rejections (HTTP status, error body shape) consistent across Scenarios 4, 6, 7, 9, and 10, or does each imply a different shape without a unifying requirement? [Consistency, Spec §FR-007–FR-009, FR-014, contracts/api.md]
+- [x] CHK012 Is the response contract for enforcement rejections (HTTP status, error body shape) consistent across Scenarios 4, 6, 7, 9, and 10, or does each imply a different shape without a unifying requirement? [Consistency, Spec §FR-007–FR-009, FR-014, contracts/api.md]
+  - Resolved 2026-07-28: FR-007 now specifies a uniform 403 + `{reason_code, reason_message, query_id}` body for every enforcement rejection, and a 200 with the same body shape for Scenario 10's non-rejection `QUESTION_NOT_MAPPED` case (Clarifications, Session 2026-07-28).
 - [ ] CHK013 Are "block" (column-level, FR-008) and "reject the whole query" (query-level, FR-009/on_role_mismatch=reject) kept terminologically distinct in the requirements, so a reader can't conflate a column-scoped decision with a query-scoped decision? [Consistency, Spec §FR-008, FR-009]
 - [ ] CHK014 Does the Success Criteria's "all ten behavioral scenarios pass" requirement align with FR-014's two independent guarantees (DML rejection AND irrelevant-question handling), or could a plan satisfy one half while leaving the other under-specified? [Consistency, Spec §Success Criteria, FR-014]
 
@@ -50,7 +53,8 @@ spec/plan/contracts, not as test steps against running code.
 - [x] CHK015 Is NFR-002's "≤200ms" enforcement-latency budget defined with a measurement methodology (percentile, load condition, query complexity assumed) sufficient to make pass/fail objective? [Measurability, Spec §NFR-002]
   - Resolved 2026-07-27: NFR-002 now specifies p95, single query, no concurrent load, measured in the eval/CI script (Clarifications, Session 2026-07-27).
 - [ ] CHK016 Can "deterministically evaluates every generated SQL query" (FR-007) be objectively verified, or does it require an implicit definition of "every" (e.g., does it include queries generated by a future retry loop, out of scope here, or only the single-shot path)? [Measurability, Spec §FR-007]
-- [ ] CHK017 Is there a measurable acceptance bar for the row-policy injection guarantee in Scenario 5 (e.g., "cannot return rows outside the caller's tenant") beyond the single illustrative example — does it specify how this is verified for arbitrary query shapes (joins, subqueries, CTEs)? [Measurability, Spec §Scenario 5]
+- [x] CHK017 Is there a measurable acceptance bar for the row-policy injection guarantee in Scenario 5 (e.g., "cannot return rows outside the caller's tenant") beyond the single illustrative example — does it specify how this is verified for arbitrary query shapes (joins, subqueries, CTEs)? [Measurability, Spec §Scenario 5]
+  - Resolved 2026-07-28: FR-007 and Success Criteria now require joins/CTEs/subqueries/`SELECT *` to be a tested guarantee (dedicated per-shape coverage), not best-effort (Clarifications, Session 2026-07-28).
 
 ## Scenario Coverage / Edge Case Coverage
 
@@ -58,11 +62,13 @@ spec/plan/contracts, not as test steps against running code.
   - Resolved 2026-07-24: Scenario 5 and the Clarifications session now specify AST-level AND-merge, never overwrite.
 - [x] CHK019 Are requirements defined for a role-gated column referenced only inside an aggregate/computed expression (e.g., `COUNT(diagnosis_code)`) under `on_role_mismatch: exclude`, where dropping the raw column changes the semantics of the aggregate? [Edge Case, Gap, Spec §FR-008, Scenario 7]
   - Resolved 2026-07-27: FR-008 now treats this case as unsupported for `exclude`, falling back to `reject`/`ROLE_GATE_MISMATCH` (Clarifications, Session 2026-07-27).
-- [ ] CHK020 Are requirements defined for a schema that is *partially* classified (some columns approved, others still `pending_review`) — is the default-closed rule (FR-009/Scenario 6) applied at column granularity within an otherwise-active policy, not only at whole-schema granularity? [Coverage, Gap, Spec §FR-009, Scenario 6]
+- [x] CHK020 Are requirements defined for a schema that is *partially* classified (some columns approved, others still `pending_review`) — is the default-closed rule (FR-009/Scenario 6) applied at column granularity within an otherwise-active policy, not only at whole-schema granularity? [Coverage, Gap, Spec §FR-009, Scenario 6]
+  - Resolved 2026-07-28: FR-009 now specifies column-granularity default-closed — approved columns remain queryable while pending_review columns are individually blocked, with no whole-schema gate (Clarifications, Session 2026-07-28).
 - [x] CHK021 Are requirements defined for enforcement behavior when a policy publish (admin action) occurs concurrently with an in-flight query evaluation — is a query pinned to one policy version for its full evaluation, or could it see a partial update? [Coverage, Gap, Spec §FR-006, FR-007]
   - Resolved 2026-07-27: FR-007 now specifies the policy version is resolved once and pinned for the full evaluation (Clarifications, Session 2026-07-27).
 - [ ] CHK022 Beyond the ten named scenarios, does the spec require any adversarial/fuzz-style negative testing of the enforcement path (malformed SQL, deeply nested subqueries, non-ASCII identifiers) commensurate with Constitution Principle I calling this the project's core differentiator? [Coverage, Gap, Spec §Success Criteria, Constitution Principle I]
-- [ ] CHK023 Is column resolution scope (FR-007/research.md §5) required to cover columns referenced only within CTEs, subqueries, or `SELECT *` expansions — not just top-level `SELECT` list columns — for both the no-policy default-closed check and the role-gate check? [Coverage, Spec §FR-007, FR-009]
+- [x] CHK023 Is column resolution scope (FR-007/research.md §5) required to cover columns referenced only within CTEs, subqueries, or `SELECT *` expansions — not just top-level `SELECT` list columns — for both the no-policy default-closed check and the role-gate check? [Coverage, Spec §FR-007, FR-009]
+  - Resolved 2026-07-28: FR-007 now requires joins/CTEs/subqueries/`SELECT *` resolution for the no-active-policy check, the role_gate check, and row-policy injection alike, as a tested guarantee (Clarifications, Session 2026-07-28).
 
 ## Non-Functional Requirements
 
@@ -72,8 +78,10 @@ spec/plan/contracts, not as test steps against running code.
 
 ## Dependencies & Assumptions
 
-- [ ] CHK026 Is the assumption that the auth-stub role header is always trustworthy (never spoofable within Milestone 1's scope) explicitly documented, given that role-gating (FR-008) and review-approval authority (FR-013) both depend on it? [Assumption, Spec §FR-008, FR-013]
-- [ ] CHK027 Is the dependency of row-policy injection (Scenario 5) on the `Caller`/`Domain` concepts (data-model.md, not persisted per spec.md Key Entities) made explicit in `spec.md` itself, or only cross-referenced indirectly? [Dependency, Spec §Key Entities]
+- [x] CHK026 Is the assumption that the auth-stub role header is always trustworthy (never spoofable within Milestone 1's scope) explicitly documented, given that role-gating (FR-008) and review-approval authority (FR-013) both depend on it? [Assumption, Spec §FR-008, FR-013]
+  - Resolved 2026-07-28: "Out of Scope" now explicitly states the auth-stub headers are assumed trustworthy/unspoofed for M1, with no signature/session/identity-provider verification.
+- [x] CHK027 Is the dependency of row-policy injection (Scenario 5) on the `Caller`/`Domain` concepts (data-model.md, not persisted per spec.md Key Entities) made explicit in `spec.md` itself, or only cross-referenced indirectly? [Dependency, Spec §Key Entities]
+  - Already resolved by existing spec.md text (2026-07-23 follow-up pass): Key Entities explicitly cross-references `Caller` and `Domain` as data-model.md-defined, non-persisted concepts. No new change needed for this session.
 
 ## Ambiguities & Conflicts
 
