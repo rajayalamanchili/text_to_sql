@@ -1,0 +1,63 @@
+services:
+  healthcare-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${HEALTHCARE_DB_USER:?set HEALTHCARE_DB_USER in .env}
+      POSTGRES_PASSWORD: ${HEALTHCARE_DB_PASSWORD:?set HEALTHCARE_DB_PASSWORD in .env}
+      POSTGRES_DB: ${HEALTHCARE_DB_NAME:?set HEALTHCARE_DB_NAME in .env}
+    ports:
+      - "${HEALTHCARE_DB_PORT:-5432}:5432"
+    volumes:
+      - healthcare-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${HEALTHCARE_DB_USER} -d ${HEALTHCARE_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  fintech-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${FINTECH_DB_USER:?set FINTECH_DB_USER in .env}
+      POSTGRES_PASSWORD: ${FINTECH_DB_PASSWORD:?set FINTECH_DB_PASSWORD in .env}
+      POSTGRES_DB: ${FINTECH_DB_NAME:?set FINTECH_DB_NAME in .env}
+    ports:
+      - "${FINTECH_DB_PORT:-5433}:5432"
+    volumes:
+      - fintech-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FINTECH_DB_USER} -d ${FINTECH_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      HEALTHCARE_DATABASE_URL: postgresql://${HEALTHCARE_DB_USER}:${HEALTHCARE_DB_PASSWORD}@healthcare-db:5432/${HEALTHCARE_DB_NAME}
+      FINTECH_DATABASE_URL: postgresql://${FINTECH_DB_USER}:${FINTECH_DB_PASSWORD}@fintech-db:5432/${FINTECH_DB_NAME}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./policies:/app/policies
+      - ./domains:/app/domains
+    depends_on:
+      healthcare-db:
+        condition: service_healthy
+      fintech-db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  healthcare-db-data:
+  fintech-db-data:

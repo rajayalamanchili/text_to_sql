@@ -60,7 +60,7 @@ required to prove the core guardrail claim.
 - [X] T002 Create frontend Next.js (TypeScript, Tailwind) project per `plan.md` structure in `frontend/`
 - [X] T003 [P] Configure Python linting/formatting (ruff) in `backend/pyproject.toml`
 - [X] T004 [P] Configure TypeScript linting/formatting (eslint/prettier) in `frontend/`
-- [ ] T005 Docker Compose config for 2× Postgres (healthcare, fintech), backend, frontend in `docker-compose.yml`
+- [X] T005 Docker Compose config for 2× Postgres (healthcare, fintech), backend, frontend in `docker-compose.yml`
 - [ ] T006 [P] GitHub Actions CI skeleton in `.github/workflows/ci.yml`
 
 ---
