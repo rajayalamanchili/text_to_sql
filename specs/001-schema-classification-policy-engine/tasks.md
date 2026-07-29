@@ -132,7 +132,7 @@ the record `pending_review`; an `admin`-role approve returns 200, sets
 
 ### Tests for User Story 2
 
-- [ ] T031 [P] [US2] BDD step defs for Scenario 8 (only admin can approve) in `backend/tests/integration/test_scenario8_admin_approval.py`
+- [X] T031 [P] [US2] BDD step defs for Scenario 8 (only admin can approve) in `backend/tests/integration/test_scenario8_admin_approval.py`
 
 ### Implementation for User Story 2
 
