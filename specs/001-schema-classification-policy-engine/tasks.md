@@ -108,7 +108,7 @@ A low-confidence fintech `notes` column lands in `pending_review`, confidence
 - [X] T021 [P] [US1] Value-pattern masking utility: length buckets + regex-generalized pattern classes, never raw values (research.md §3) in `backend/src/services/classification/masking.py`
 - [X] T022 [US1] LLM-assisted classifier consuming only masked input (FR-003) in `backend/src/services/classification/llm_classifier.py` (depends on T021)
 - [X] T023 [US1] Confidence combination logic: agree → max, disagree → more-sensitive category wins + min confidence (research.md §4) in `backend/src/services/classification/confidence.py` (depends on T020, T022)
-- [ ] T024 [US1] Classification LangGraph graph: enumerate → heuristic → confidence gate → llm (conditional) → persist (research.md §9) in `backend/src/graph/classification_graph.py` (depends on T019, T023)
+- [X] T024 [US1] Classification LangGraph graph: enumerate → heuristic → confidence gate → llm (conditional) → persist (research.md §9) in `backend/src/graph/classification_graph.py` (depends on T019, T023)
 - [ ] T025 [US1] `POST /domains/{domain}/schema/enumerate` endpoint (contracts/api.md) in `backend/src/api/schema.py` (depends on T019, T011)
 - [ ] T026 [US1] `POST /domains/{domain}/classify` endpoint (contracts/api.md) in `backend/src/api/classify.py` (depends on T024)
 - [ ] T027 [US1] Persist classification results + `classify_*` audit log entries in `backend/src/services/classification/persistence.py` (depends on T009, T018)
