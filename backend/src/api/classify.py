@@ -14,7 +14,7 @@ from src.config.domains import DomainConfig
 from src.graph.classification_graph import run_classification
 from src.models.column_classification import ClassificationStatus
 from src.services.audit.audit_log import AuditLogWriter, PostgresAuditLogSink
-from src.services.classification.llm_classifier import NullLLMClient
+from src.services.classification.anthropic_client import build_default_llm_client
 from src.services.classification.persistence import PostgresClassificationStore
 
 router = APIRouter(prefix="/domains/{domain}", tags=["classification"])
@@ -30,12 +30,13 @@ def classify_domain_schema(
     (FR-002, FR-003). Idempotent per schema snapshot — re-running
     re-classifies all columns from scratch (contracts/api.md).
 
-    Uses `NullLLMClient` — no real Anthropic/OpenAI adapter is wired in
-    yet (see llm_classifier.py) — so every low-confidence column stays
-    exactly at its heuristic-pass score, landing in `pending_review`
-    rather than a fabricated auto-approval. Every persisted column also
-    writes a `classify_*` `AuditLogEntry` (FR-010), all sharing one
-    `run_id` — the same id returned to the caller below.
+    Uses the real Anthropic adapter (`anthropic_client.py`) when an API
+    credential is configured, falling back to `NullLLMClient` otherwise
+    — every low-confidence column then stays exactly at its heuristic-
+    pass score, landing in `pending_review` rather than a fabricated
+    auto-approval. Every persisted column also writes a `classify_*`
+    `AuditLogEntry` (FR-010), all sharing one `run_id` — the same id
+    returned to the caller below.
     """
     if not domain.database_url:
         raise HTTPException(
@@ -47,7 +48,10 @@ def classify_domain_schema(
         store = PostgresClassificationStore(conn, audit_writer=audit_writer, actor_role=caller.role)
         records = asyncio.run(
             run_classification(
-                domain=domain.name, conn=conn, llm_client=NullLLMClient(), store=store
+                domain=domain.name,
+                conn=conn,
+                llm_client=build_default_llm_client(),
+                store=store,
             )
         )
 
