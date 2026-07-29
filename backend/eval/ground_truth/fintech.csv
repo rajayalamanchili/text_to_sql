@@ -1,0 +1,31 @@
+table_name,column_name,expected_classification,rationale
+customers,customer_id,business,surrogate primary key
+customers,tenant_id,business,structural multi-tenancy key; not a personal identifier
+customers,first_name,pii_direct,personal name is a direct identifier; not caught by the heuristic name-pattern dictionary (no "name" keyword) — expected heuristic/LLM accuracy gap
+customers,last_name,pii_direct,personal name is a direct identifier; same dictionary gap as first_name
+customers,email,pii_indirect,matches heuristic dictionary (email|phone|address|zip)
+customers,phone,pii_indirect,matches heuristic dictionary
+customers,address,pii_indirect,matches heuristic dictionary; quasi-identifying geography
+customers,city,pii_indirect,geographic quasi-identifier
+customers,state,business,too coarse to be individually identifying
+customers,zip,pii_indirect,matches heuristic dictionary; classic re-identification quasi-identifier
+customers,created_at,business,record-creation timestamp; not personally identifying
+accounts,account_id,business,surrogate primary key
+accounts,customer_id,business,foreign key reference
+accounts,account_type,business,bounded operational category (checking/savings/etc.)
+accounts,balance,sensitive_category,matches heuristic dictionary (diagnosis|icd|cpt|account_number|balance); sensitive financial data
+transactions,transaction_id,business,surrogate primary key
+transactions,account_id,business,foreign key reference
+transactions,transaction_type,business,bounded operational category
+transactions,amount,sensitive_category,sensitive financial transaction data; same risk tier as balance
+transactions,balance_before,sensitive_category,matches heuristic dictionary (balance); sensitive financial data
+transactions,balance_after,sensitive_category,matches heuristic dictionary (balance); sensitive financial data
+transactions,is_fraud,sensitive_category,fraud-flag on a specific transaction is sensitive financial/security data
+transactions,transaction_date,business,event timestamp; not personally identifying on its own
+transactions,notes,sensitive_category,ambiguous free-text memo (Scenario 2) — never defaulted to business per the fail-closed adversarial-column rule
+claims,claim_id,business,surrogate primary key
+claims,customer_id,business,foreign key reference
+claims,tenant_id,business,row-level policy scoping key (Scenario 5); not itself an identifying value
+claims,member_ssn,pii_direct,direct identifier (Scenario 4 block target)
+claims,claim_amount,sensitive_category,sensitive financial/insurance data; same risk tier as balance
+claims,claim_status,business,bounded operational category

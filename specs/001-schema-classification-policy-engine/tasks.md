@@ -113,9 +113,9 @@ A low-confidence fintech `notes` column lands in `pending_review`, confidence
 - [X] T026 [US1] `POST /domains/{domain}/classify` endpoint (contracts/api.md) in `backend/src/api/classify.py` (depends on T024)
 - [X] T027 [US1] Persist classification results + `classify_*` audit log entries in `backend/src/services/classification/persistence.py` (depends on T009, T018)
 - [X] T027a [US1] `GET /domains/{domain}/classifications` endpoint, any status, optional `table`/`column` filters (contracts/api.md, added 2026-07-29 to close a gap T015/T017's BDD tests surfaced — neither `/review-queue` nor `/policy` can answer "what did the pipeline decide for this column, right now") in `backend/src/api/classify.py` (depends on T027)
-- [ ] T028 [P] [US1] Hand-labeled ground truth set (20–30 columns) for healthcare in `backend/eval/ground_truth/healthcare.csv`
-- [ ] T029 [P] [US1] Hand-labeled ground truth set (20–30 columns) for fintech in `backend/eval/ground_truth/fintech.csv`
-- [ ] T030 [US1] Classifier precision/recall eval script (Success Criteria: ≥0.85 on `pii_direct`) in `backend/eval/classifier_eval.py` (depends on T028, T029)
+- [X] T028 [P] [US1] Hand-labeled ground truth set (20–30 columns) for healthcare in `backend/eval/ground_truth/healthcare.csv`
+- [X] T029 [P] [US1] Hand-labeled ground truth set (20–30 columns) for fintech in `backend/eval/ground_truth/fintech.csv`
+- [X] T030 [US1] Classifier precision/recall eval script (Success Criteria: ≥0.85 on `pii_direct`) in `backend/eval/classifier_eval.py` (depends on T028, T029)
 
 **Checkpoint**: US1 fully functional and testable independently of review UI or enforcement.
 

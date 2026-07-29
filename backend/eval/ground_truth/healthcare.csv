@@ -1,0 +1,26 @@
+table_name,column_name,expected_classification,rationale
+patients,patient_id,business,surrogate primary key; no external meaning on its own
+patients,patient_ssn,pii_direct,direct identifier (Scenario 1)
+patients,first_name,pii_direct,personal name is a direct identifier; not caught by the heuristic name-pattern dictionary (no "name" keyword) — expected heuristic/LLM accuracy gap
+patients,last_name,pii_direct,personal name is a direct identifier; same dictionary gap as first_name
+patients,birth_date,pii_indirect,HIPAA Safe Harbor treats dates tied to an individual as quasi-identifying
+patients,gender,pii_indirect,demographic quasi-identifier
+patients,marital_status,business,low-risk bounded categorical demographic value
+patients,address,pii_indirect,matches heuristic dictionary (email|phone|address|zip); quasi-identifying geography
+patients,city,pii_indirect,geographic quasi-identifier
+patients,state,business,too coarse to be individually identifying
+patients,zip,pii_indirect,matches heuristic dictionary; classic re-identification quasi-identifier
+patients,diagnosis_code,sensitive_category,health condition code (Scenario 7 role-gate signal column)
+patients,patient_notes,sensitive_category,adversarial free-text clinical narrative — must never be auto-classified business (Scenario 3)
+encounters,encounter_id,business,surrogate primary key
+encounters,patient_id,business,foreign key reference; not itself an identifying value
+encounters,encounter_date,pii_indirect,HIPAA treats dates related to an individual's care as quasi-identifying
+encounters,encounter_class,business,bounded operational category (ambulatory/emergency/etc.)
+encounters,provider_name,pii_direct,a person's name (the provider's not the patient's) is still a direct identifier
+encounters,reason_description,sensitive_category,free-text description of the medical reason for the encounter
+conditions,condition_id,business,surrogate primary key
+conditions,patient_id,business,foreign key reference
+conditions,encounter_id,business,foreign key reference
+conditions,condition_code,sensitive_category,ICD-10-style diagnosis code
+conditions,condition_description,sensitive_category,free-text description of a medical condition
+conditions,onset_date,pii_indirect,HIPAA treats dates related to an individual's health event as quasi-identifying

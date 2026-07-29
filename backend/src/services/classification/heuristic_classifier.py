@@ -35,7 +35,7 @@ _HIGH_CARDINALITY_THRESHOLD = 0.9
 # (unlikely given these keyword sets, but not impossible) resolves to the
 # more sensitive category rather than an arbitrary one (research.md §1).
 _NAME_PATTERNS: tuple[tuple[re.Pattern[str], Classification], ...] = (
-    (re.compile(r"ssn|social_security", re.IGNORECASE), Classification.PII_DIRECT),
+    (re.compile(r"ssn|social_security|name", re.IGNORECASE), Classification.PII_DIRECT),
     (re.compile(r"email|phone|address|zip", re.IGNORECASE), Classification.PII_INDIRECT),
     (
         re.compile(r"diagnosis|icd|cpt|account_number|balance", re.IGNORECASE),
