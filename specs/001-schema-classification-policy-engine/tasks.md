@@ -74,7 +74,7 @@ required to prove the core guardrail claim.
 - [X] T009 [P] `structlog` configuration + `AuditLogEntry` model and writer, with `reason_code` as a fixed reason-code enum (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR`) plus a rendered `reason_message` (FR-010, research.md §8) in `backend/src/services/audit/audit_log.py`
 - [X] T010 [P] `Caller`/`Role` model + auth-stub FastAPI dependency parsing `X-Steward-Role` (defaulting to `analyst`) and `X-Steward-Tenant` (data-model.md#Caller, research.md §7) in `backend/src/api/deps.py`
 - [X] T011 FastAPI app skeleton + router registration in `backend/src/api/main.py` (depends on T010)
-- [ ] T012 [P] Healthcare domain schema + Synthea-derived seed script (research.md §10) in `domains/healthcare/schema.sql`, `domains/healthcare/seed.py`
+- [X] T012 [P] Healthcare domain schema + Python-native Synthea-style seed script (research.md §10) in `domains/healthcare/schema.sql`, `domains/healthcare/seed.py`
 - [ ] T013 [P] Fintech domain schema + Faker/PaySim-style seed script (research.md §10) in `domains/fintech/schema.sql`, `domains/fintech/seed.py`
 - [ ] T014 Wire both domain Postgres instances + seed scripts into Docker Compose init (depends on T005, T012, T013) in `docker-compose.yml`
 
@@ -255,7 +255,7 @@ excluded, per FR-008 configuration) for a caller without the required role
 - [ ] T069 [P] NFR-002 latency test: p95 enforcement-check latency ≤200ms, measured over single-query/no-concurrent-load runs (spec.md NFR-002) in `backend/tests/integration/test_nfr002_enforcement_latency.py`
 - [ ] T070 [P] Security test: assert the masking utility never emits raw sample values into an LLM prompt (FR-003, Principle I) in `backend/tests/unit/test_masking_no_raw_values.py`
 - [ ] T071 Run `quickstart.md` validation end-to-end (including Scenarios 9, 10, and the `GET /audit-log` walkthrough) and record results
-- [ ] T072 [P] Synthetic-data safeguard test: assert `domains/healthcare/seed.py` and `domains/fintech/seed.py` only construct data via the checked-in Synthea/Faker generators and never read a non-local or externally-supplied connection string (FR-012, Constitution Principle VII) in `backend/tests/unit/test_synthetic_data_only.py`
+- [ ] T072 [P] Synthetic-data safeguard test: assert `domains/healthcare/seed.py` and `domains/fintech/seed.py` only construct data via the checked-in Python-native Synthea-style/Faker generators and never read a non-local or externally-supplied connection string (FR-012, Constitution Principle VII) in `backend/tests/unit/test_synthetic_data_only.py`
 
 ---
 
@@ -350,5 +350,9 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   since-corrected spec inconsistency.
 - T072 was added in a `/speckit.analyze` follow-up pass on 2026-07-23: FR-012
   (synthetic-data-only) previously had no dedicated regression safeguard task.
+- T012 (2026-07-29): `domains/healthcare/seed.py` uses a Python-native
+  Synthea-style generator, not the actual Synthea tool — this environment
+  has no JVM. `tech-stack.md`, `research.md` §10, and `plan.md` were
+  amended accordingly; T072's description was updated to match.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.
 - Avoid: same-file conflicts within a `[P]` batch, and any engine code path that branches on domain name (Constitution Principle IV, checked by T067).

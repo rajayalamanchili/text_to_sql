@@ -65,7 +65,7 @@ the classifier eval; 2 roles (`analyst`, `admin`) via auth stub.
 | IV | One Engine, Many Policies | PASS | Domain-specific data lives entirely in `policies/<domain>/` YAML and `domains/<domain>/` config+seed scripts; engine source (`backend/src/`) has no `if domain == "healthcare"` branches — verified by FR-011's explicit test. |
 | V | Spec Before Code | PASS | This plan follows an approved, clarified `spec.md`; `tasks.md` (next command) will not be generated until this plan is complete. |
 | VI | Evaluation Is a Merge Gate | PASS (planned) | CI (GitHub Actions, per `tech-stack.md`) runs `pytest-bdd` scenario suite + classifier precision/recall script on every PR; both are part of this milestone's Definition of Done, not follow-up work. |
-| VII | Synthetic Data, Honest Claims | PASS | Healthcare data from Synthea, fintech from Faker/PaySim-style generation (FR-012); no real data path exists anywhere in `domains/`. |
+| VII | Synthetic Data, Honest Claims | PASS | Healthcare data from a Python-native Synthea-style generator (amended 2026-07-29 — see tech-stack.md), fintech from Faker/PaySim-style generation (FR-012); no real data path exists anywhere in `domains/`. |
 | VIII | Observability and Auditability by Default | PASS | Every classification and enforcement decision writes to the `audit_log` Postgres table via `structlog`-emitted structured events (FR-010, NFR-004); see data-model.md. |
 | IX | Bounded Autonomy | N/A | No agentic retry/tool-use loop exists in Milestone 1 — the LLM-assisted classification pass (FR-003) is a single bounded call per column, not a loop. Revisit at Milestone 3. |
 | X | Milestones Are Sequential | PASS | This is Milestone 1; no Milestone 2+ capability (RAG, agentic loop, MCP) appears in this plan's scope or structure. |
@@ -138,6 +138,16 @@ version-pinning requirements had zero task coverage (findings G1, G2,
 tracked as CRITICAL/HIGH) — `tasks.md` T010, T044a, T058, and T059 were
 updated/added to close them.
 
+**Implementation Note (2026-07-29, T012)**: `tech-stack.md`'s "Healthcare
+synthetic data" row was amended from "Synthea" to a Python-native
+Synthea-style generator (`Faker` + curated ICD-10-style diagnosis-code and
+clinical-note pools), since this project's dev/CI environment has no JVM
+and running the real Synthea tool would add an undocumented Java
+toolchain dependency purely for seed data. `research.md` §10 was updated
+to match. This does not change any principle's PASS status above — data
+remains fully synthetic (Principle VII), and no engine code path branches
+on which generator produced a domain's data (Principle IV).
+
 ## Project Structure
 
 ### Documentation (this feature)
@@ -176,7 +186,7 @@ policies/                  # versioned YAML policy artifacts, one dir per domain
                              # prefix throughout tasks.md/research.md §6/contracts/)
 
 domains/                   # domain config + synthetic data generation (no engine logic)
-├── healthcare/             # Synthea-derived schema.sql + seed script
+├── healthcare/             # Synthea-style schema.sql + Python-native seed script
 └── fintech/                # Faker/PaySim-style schema.sql + seed script
 
 frontend/

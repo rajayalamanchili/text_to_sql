@@ -41,8 +41,10 @@ milestone sequence and each milestone's definition of done, and
 - **Fail closed.** Any table or column without an approved policy
   artifact is blocked by default, not allowed by default.
 - **No real PII/PHI/financial data, ever.** All test and demo data is
-  synthetic (Synthea for healthcare, Faker/PaySim-style generation for
-  fintech). Never wire in a real data source, even for "just testing."
+  synthetic (a Python-native Synthea-style generator for healthcare, since
+  this project's environment has no JVM for the actual Synthea tool —
+  see `tech-stack.md`; Faker/PaySim-style generation for fintech). Never
+  wire in a real data source, even for "just testing."
 - **Every classification and enforcement decision is logged**, with
   enough context to answer "what was asked, what policy applied, what
   was allowed or blocked, and why" after the fact.
@@ -65,7 +67,8 @@ since they're the actual product differentiator, not incidental details.
 
 ## Useful context for any session
 
-- Two domains are in scope: **healthcare** (synthetic Synthea data) and
+- Two domains are in scope: **healthcare** (Synthea-style synthetic data,
+  Python-native generator — see `tech-stack.md`) and
   **fintech** (synthetic transaction data). The engine must stay
   domain-agnostic — if you find yourself writing a healthcare- or
   fintech-specific conditional inside engine code (not inside a policy

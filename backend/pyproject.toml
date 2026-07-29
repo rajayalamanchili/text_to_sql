@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "Steward Milestone 1: schema classification & policy enforcement engine"
 requires-python = ">=3.11"
 dependencies = [
+    "faker>=37",
     "fastapi>=0.140.0",
     "langgraph>=1.2.9",
+    "psycopg[binary]>=3.2",
     "pydantic>=2",
     "sqlglot>=30.13.0",
     "structlog>=26.1.0",
