@@ -96,9 +96,9 @@ A low-confidence fintech `notes` column lands in `pending_review`, confidence
 
 ### Tests for User Story 1
 
-- [ ] T015 [P] [US1] BDD step defs for Scenario 1 (obvious PII classified correctly) in `backend/tests/integration/test_scenario1_pii_direct.py`
-- [ ] T016 [P] [US1] BDD step defs for Scenario 2 (ambiguous column → human review) in `backend/tests/integration/test_scenario2_review_queue.py`
-- [ ] T017 [P] [US1] BDD step defs for Scenario 3 (adversarial column not misclassified safe) in `backend/tests/integration/test_scenario3_adversarial.py`
+- [X] T015 [P] [US1] BDD step defs for Scenario 1 (obvious PII classified correctly) in `backend/tests/integration/test_scenario1_pii_direct.py`
+- [X] T016 [P] [US1] BDD step defs for Scenario 2 (ambiguous column → human review) in `backend/tests/integration/test_scenario2_review_queue.py`
+- [X] T017 [P] [US1] BDD step defs for Scenario 3 (adversarial column not misclassified safe) in `backend/tests/integration/test_scenario3_adversarial.py`
 
 ### Implementation for User Story 1
 
@@ -112,6 +112,7 @@ A low-confidence fintech `notes` column lands in `pending_review`, confidence
 - [ ] T025 [US1] `POST /domains/{domain}/schema/enumerate` endpoint (contracts/api.md) in `backend/src/api/schema.py` (depends on T019, T011)
 - [ ] T026 [US1] `POST /domains/{domain}/classify` endpoint (contracts/api.md) in `backend/src/api/classify.py` (depends on T024)
 - [ ] T027 [US1] Persist classification results + `classify_*` audit log entries in `backend/src/services/classification/persistence.py` (depends on T009, T018)
+- [ ] T027a [US1] `GET /domains/{domain}/classifications` endpoint, any status, optional `table`/`column` filters (contracts/api.md, added 2026-07-29 to close a gap T015/T017's BDD tests surfaced — neither `/review-queue` nor `/policy` can answer "what did the pipeline decide for this column, right now") in `backend/src/api/classify.py` (depends on T027)
 - [ ] T028 [P] [US1] Hand-labeled ground truth set (20–30 columns) for healthcare in `backend/eval/ground_truth/healthcare.csv`
 - [ ] T029 [P] [US1] Hand-labeled ground truth set (20–30 columns) for fintech in `backend/eval/ground_truth/fintech.csv`
 - [ ] T030 [US1] Classifier precision/recall eval script (Success Criteria: ≥0.85 on `pii_direct`) in `backend/eval/classifier_eval.py` (depends on T028, T029)
@@ -135,7 +136,7 @@ the record `pending_review`; an `admin`-role approve returns 200, sets
 
 ### Implementation for User Story 2
 
-- [ ] T032 [US2] `GET /domains/{domain}/review-queue` endpoint (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T018, T011)
+- [ ] T032 [US2] `GET /domains/{domain}/review-queue` endpoint — a `status == "pending_review"`-filtered view of T027a's classification store, not a separate one (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T018, T011, T027a)
 - [ ] T033 [US2] `POST .../review-queue/{column_id}/approve` endpoint, admin-only (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T032)
 - [ ] T034 [US2] `POST .../review-queue/{column_id}/reject` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
 - [ ] T035 [US2] `POST .../review-queue/{column_id}/reclassify` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
@@ -359,5 +360,24 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   original `accounts`/`transactions`/`customers` set, to match
   `quickstart.md`'s Scenario 4/5 examples. `research.md` §10 was updated
   accordingly.
+- T015/T017 (2026-07-29): writing these BDD tests surfaced a contract gap
+  — neither `/review-queue` (pending-only) nor `/policy` (published,
+  no confidence) can answer "what did the pipeline decide for this
+  column, right now." Added `GET /domains/{domain}/classifications`
+  (`contracts/api.md`) and task T027a to implement it; T032
+  (`/review-queue`) now explicitly depends on T027a as a filtered view
+  of the same store rather than a separate one.
+- **Open gap for T044/T045** (not blocking T015-T017, flagged for
+  whoever picks up policy publish): `ColumnClassification` has no
+  `action` field (data-model.md) — `PolicyColumn.action` must be derived
+  from `classification` at publish time, and `contracts/policy-artifact.schema.yaml`'s
+  example shows this mapping is NOT a pure 1:1 function: `pii_direct`
+  consistently maps to `block` (both examples; T015's Scenario 1 test
+  relies on only this much), but `sensitive_category` maps to `block` in
+  one example (`patient_notes`) and `role_gate` in another
+  (`diagnosis_code`) — implying `action` for at least `sensitive_category`
+  needs either an explicit admin choice (via reclassify/approve) or a
+  documented tie-breaking rule, neither of which exists yet. Resolve
+  before implementing T044/T045.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.
 - Avoid: same-file conflicts within a `[P]` batch, and any engine code path that branches on domain name (Constitution Principle IV, checked by T067).
