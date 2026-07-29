@@ -14,11 +14,15 @@ import logging
 import sys
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 from uuid import UUID, uuid4
 
+import psycopg
 import structlog
 from pydantic import BaseModel, model_validator
+
+_MIGRATION_PATH = Path(__file__).resolve().parents[2] / "db" / "migrations" / "0001_audit_log.sql"
 
 
 class ActorRole(StrEnum):
@@ -152,12 +156,57 @@ _logger = structlog.get_logger("steward.audit_log")
 
 @runtime_checkable
 class AuditLogSink(Protocol):
-    """Persistence hook for the `audit_log` Postgres table. Left injectable
-    rather than hardcoding a driver here — no Postgres connection/pool
-    module exists yet in this milestone's task sequence; a concrete
-    implementation plugs in wherever that connection is established."""
+    """Persistence hook for the `audit_log` Postgres table. Left as a
+    protocol rather than hardcoding a driver here, so callers that don't
+    need durable persistence (e.g. a unit test) can pass `None` to
+    `AuditLogWriter` and still get the structured log line. `PostgresAuditLogSink`
+    below is the concrete Milestone 1 implementation."""
 
     async def save(self, entry: AuditLogEntry) -> None: ...
+
+
+class PostgresAuditLogSink:
+    """Writes `AuditLogEntry` rows into the `audit_log` table
+    (`db/migrations/0001_audit_log.sql`) on an already-open, per-domain
+    connection — same per-domain storage pattern as
+    `column_classifications` (tech-stack.md)."""
+
+    def __init__(self, conn: psycopg.Connection) -> None:
+        self._conn = conn
+        self._ensure_schema()
+
+    def _ensure_schema(self) -> None:
+        with self._conn.cursor() as cur:
+            cur.execute(_MIGRATION_PATH.read_text())
+        self._conn.commit()
+
+    async def save(self, entry: AuditLogEntry) -> None:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO audit_log (
+                    id, "timestamp", domain, query_id, actor_role, decision,
+                    reason_code, reason_message, policy_version_used, raw_query_hash
+                ) VALUES (
+                    %(id)s, %(timestamp)s, %(domain)s, %(query_id)s, %(actor_role)s,
+                    %(decision)s, %(reason_code)s, %(reason_message)s,
+                    %(policy_version_used)s, %(raw_query_hash)s
+                )
+                """,
+                {
+                    "id": entry.id,
+                    "timestamp": entry.timestamp,
+                    "domain": entry.domain,
+                    "query_id": entry.query_id,
+                    "actor_role": entry.actor_role.value,
+                    "decision": entry.decision.value,
+                    "reason_code": entry.reason_code.value if entry.reason_code else None,
+                    "reason_message": entry.reason_message,
+                    "policy_version_used": entry.policy_version_used,
+                    "raw_query_hash": entry.raw_query_hash,
+                },
+            )
+        self._conn.commit()
 
 
 class AuditLogWriter:

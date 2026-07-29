@@ -76,6 +76,32 @@ def render_prompt(profile: MaskedColumnProfile) -> str:
     )
 
 
+class NullLLMClient:
+    """Placeholder `LLMClassifierClient` — performs no real model
+    inference. Always proposes `unclassified` at (pre-clamp) confidence
+    1.0, which — because `confidence.py`'s combination rule never lets
+    `unclassified` win and takes `min(heuristic, llm)` on disagreement —
+    makes the combined result exactly equal to the heuristic pass alone:
+    this client can only ever match or lower a column's confidence,
+    never raise it above what heuristic scoring alone established.
+
+    Used as the default until a real provider adapter (tech-stack.md:
+    Anthropic primary, OpenAI secondary) is wired in. Every column
+    routed through this client simply stays wherever the heuristic pass
+    left it — the fail-closed direction (Constitution Principle II),
+    not a fabricated opinion. `llm_score`/`llm_rationale` on the
+    resulting record make clear no real classification happened.
+    """
+
+    async def classify_column(self, profile: MaskedColumnProfile) -> LLMClassificationResponse:
+        del profile  # no signal is read; this client never inspects the input
+        return LLMClassificationResponse(
+            classification=Classification.UNCLASSIFIED,
+            confidence=1.0,
+            rationale="LLM-assisted pass not configured — no model was called for this column.",
+        )
+
+
 async def classify_with_llm(profile: MaskedColumnProfile, client: LLMClassifierClient) -> LLMResult:
     """Run the LLM-assisted pass for one column, on masked input only
     (FR-003)."""

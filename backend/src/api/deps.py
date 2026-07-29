@@ -9,9 +9,10 @@ guards them.
 
 from __future__ import annotations
 
-from fastapi import Header
+from fastapi import Header, HTTPException
 from pydantic import BaseModel
 
+from src.config.domains import DomainConfig, UnknownDomainError, get_domain
 from src.services.audit.audit_log import ActorRole
 
 ROLE_HEADER = "X-Steward-Role"
@@ -50,3 +51,16 @@ def get_caller(
     tenant_id = x_steward_tenant.strip() if x_steward_tenant and x_steward_tenant.strip() else None
 
     return Caller(role=role, tenant_id=tenant_id)
+
+
+def get_domain_config(domain: str) -> DomainConfig:
+    """Resolve the `{domain}` path param to its `DomainConfig`.
+
+    404s on an unconfigured domain name (FR-011) rather than letting an
+    unknown domain silently proceed — a fail-closed default at the API
+    boundary, mirrored by every domain-scoped endpoint that depends on
+    this."""
+    try:
+        return get_domain(domain)
+    except UnknownDomainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

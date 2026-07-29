@@ -12,6 +12,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api import classify, schema
 from src.services.audit.audit_log import configure_logging
 
 configure_logging()
@@ -48,8 +49,10 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Domain routers are registered below as their tasks land, e.g.:
-#     from src.api import schema, classify, review_queue, policy, query, audit
-#     app.include_router(schema.router)
-#     app.include_router(classify.router)
+app.include_router(schema.router)
+app.include_router(classify.router)
+
+# Remaining domain routers are registered below as their tasks land, e.g.:
+#     from src.api import review_queue, policy, query, audit
+#     app.include_router(review_queue.router)
 #     ...

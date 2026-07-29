@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import ValidationError
@@ -8,6 +9,7 @@ from src.services.audit.audit_log import (
     AuditLogEntry,
     AuditLogWriter,
     Decision,
+    PostgresAuditLogSink,
     ReasonCode,
     render_reason_message,
 )
@@ -96,3 +98,45 @@ def test_writer_without_sink_does_not_raise():
     )
 
     asyncio.run(writer.write(entry))
+
+
+def _fake_conn():
+    cursor = MagicMock()
+    cursor.__enter__.return_value = cursor
+    cursor.__exit__.return_value = False
+    conn = MagicMock()
+    conn.cursor.return_value = cursor
+    return conn, cursor
+
+
+def test_postgres_sink_applies_migration_ddl_on_construction():
+    conn, cursor = _fake_conn()
+
+    PostgresAuditLogSink(conn)
+
+    ddl_calls = [c for c in cursor.execute.call_args_list if "CREATE TABLE" in str(c.args[0])]
+    assert len(ddl_calls) == 1
+    assert "audit_log" in str(ddl_calls[0].args[0])
+    conn.commit.assert_called()
+
+
+def test_postgres_sink_inserts_entry_and_commits():
+    conn, cursor = _fake_conn()
+    sink = PostgresAuditLogSink(conn)
+    cursor.execute.reset_mock()
+    conn.commit.reset_mock()
+    entry = AuditLogEntry.create(
+        domain="healthcare",
+        query_id=uuid.uuid4(),
+        actor_role=ActorRole.ANALYST,
+        decision=Decision.CLASSIFY_AUTO_APPROVED,
+    )
+
+    asyncio.run(sink.save(entry))
+
+    (query, params), _ = cursor.execute.call_args
+    assert "INSERT INTO audit_log" in query
+    assert params["id"] == entry.id
+    assert params["decision"] == "classify_auto_approved"
+    assert params["reason_code"] is None
+    conn.commit.assert_called_once()

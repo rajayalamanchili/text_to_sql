@@ -109,10 +109,10 @@ A low-confidence fintech `notes` column lands in `pending_review`, confidence
 - [X] T022 [US1] LLM-assisted classifier consuming only masked input (FR-003) in `backend/src/services/classification/llm_classifier.py` (depends on T021)
 - [X] T023 [US1] Confidence combination logic: agree → max, disagree → more-sensitive category wins + min confidence (research.md §4) in `backend/src/services/classification/confidence.py` (depends on T020, T022)
 - [X] T024 [US1] Classification LangGraph graph: enumerate → heuristic → confidence gate → llm (conditional) → persist (research.md §9) in `backend/src/graph/classification_graph.py` (depends on T019, T023)
-- [ ] T025 [US1] `POST /domains/{domain}/schema/enumerate` endpoint (contracts/api.md) in `backend/src/api/schema.py` (depends on T019, T011)
-- [ ] T026 [US1] `POST /domains/{domain}/classify` endpoint (contracts/api.md) in `backend/src/api/classify.py` (depends on T024)
-- [ ] T027 [US1] Persist classification results + `classify_*` audit log entries in `backend/src/services/classification/persistence.py` (depends on T009, T018)
-- [ ] T027a [US1] `GET /domains/{domain}/classifications` endpoint, any status, optional `table`/`column` filters (contracts/api.md, added 2026-07-29 to close a gap T015/T017's BDD tests surfaced — neither `/review-queue` nor `/policy` can answer "what did the pipeline decide for this column, right now") in `backend/src/api/classify.py` (depends on T027)
+- [X] T025 [US1] `POST /domains/{domain}/schema/enumerate` endpoint (contracts/api.md) in `backend/src/api/schema.py` (depends on T019, T011)
+- [X] T026 [US1] `POST /domains/{domain}/classify` endpoint (contracts/api.md) in `backend/src/api/classify.py` (depends on T024)
+- [X] T027 [US1] Persist classification results + `classify_*` audit log entries in `backend/src/services/classification/persistence.py` (depends on T009, T018)
+- [X] T027a [US1] `GET /domains/{domain}/classifications` endpoint, any status, optional `table`/`column` filters (contracts/api.md, added 2026-07-29 to close a gap T015/T017's BDD tests surfaced — neither `/review-queue` nor `/policy` can answer "what did the pipeline decide for this column, right now") in `backend/src/api/classify.py` (depends on T027)
 - [ ] T028 [P] [US1] Hand-labeled ground truth set (20–30 columns) for healthcare in `backend/eval/ground_truth/healthcare.csv`
 - [ ] T029 [P] [US1] Hand-labeled ground truth set (20–30 columns) for fintech in `backend/eval/ground_truth/fintech.csv`
 - [ ] T030 [US1] Classifier precision/recall eval script (Success Criteria: ≥0.85 on `pii_direct`) in `backend/eval/classifier_eval.py` (depends on T028, T029)

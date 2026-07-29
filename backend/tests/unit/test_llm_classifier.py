@@ -1,9 +1,11 @@
 import asyncio
 
 from src.models.column_classification import Classification
+from src.services.classification.heuristic_classifier import classify_heuristically
 from src.services.classification.llm_classifier import (
     MAX_LLM_CONFIDENCE,
     LLMClassificationResponse,
+    NullLLMClient,
     classify_with_llm,
     render_prompt,
 )
@@ -82,6 +84,30 @@ def test_classify_with_llm_only_sends_masked_profile_never_raw_values():
     dumped = stub.received_profile.model_dump_json()
     for raw in raw_values:
         assert raw not in dumped
+
+
+def test_null_llm_client_never_raises_confidence_above_heuristic():
+    from src.services.classification.confidence import combine_confidence
+
+    column = ColumnSchema(column_name="notes", data_type="text", cardinality_ratio=0.05)
+    heuristic = classify_heuristically(column)  # sensitive_category, low confidence
+    profile = mask_column_profile(column, ["short note", "another one"])
+
+    llm_result = asyncio.run(classify_with_llm(profile, NullLLMClient()))
+    combined = combine_confidence(heuristic, llm_result)
+
+    assert combined.classification == heuristic.classification
+    assert combined.confidence == heuristic.score
+
+
+def test_null_llm_client_response_is_transparent_about_not_running():
+    profile = mask_column_profile(
+        ColumnSchema(column_name="notes", data_type="text", cardinality_ratio=0.05), []
+    )
+
+    result = asyncio.run(classify_with_llm(profile, NullLLMClient()))
+
+    assert "not configured" in result.rationale.lower()
 
 
 def test_render_prompt_never_contains_raw_value_fragment():
