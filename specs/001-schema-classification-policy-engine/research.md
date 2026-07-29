@@ -184,10 +184,17 @@ open (the "how", where the spec defines the "what").
   synthetic data" row: this project's dev/CI environment has no JVM, and
   running the real Synthea tool would add an undocumented Java toolchain
   dependency purely for seed data). Fintech domain schema is hand-designed
-  (`accounts`, `transactions`, `customers`) and populated by
+  (`customers`, `accounts`, `transactions`, `claims` — the `claims` table
+  added 2026-07-29, T013, reconciling this section's original
+  `accounts`/`transactions`/`customers` set with `quickstart.md`'s
+  Scenario 4/5 examples, which reference a `claims` table with
+  `member_ssn`/`tenant_id` columns) and populated by
   `domains/fintech/seed.py` using Faker plus a PaySim-style transaction
-  pattern generator. Both live under `domains/<domain>/` as data/config only
-  — no engine code path branches on which domain is active.
+  pattern generator (`transaction_type`/`amount`/`balance_before`/
+  `balance_after`/`is_fraud` mirroring PaySim's `type`/`amount`/
+  `oldbalanceOrg`/`newbalanceOrig`/`isFraud` columns). Both live under
+  `domains/<domain>/` as data/config only — no engine code path branches
+  on which domain is active.
 - **Alternatives considered**: Loading a pre-generated Synthea CSV export
   (rejected 2026-07-29 — heavier and less transparent than generating data
   in-process for a seed script whose only job is exercising the

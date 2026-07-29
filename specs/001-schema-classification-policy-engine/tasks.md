@@ -75,7 +75,7 @@ required to prove the core guardrail claim.
 - [X] T010 [P] `Caller`/`Role` model + auth-stub FastAPI dependency parsing `X-Steward-Role` (defaulting to `analyst`) and `X-Steward-Tenant` (data-model.md#Caller, research.md §7) in `backend/src/api/deps.py`
 - [X] T011 FastAPI app skeleton + router registration in `backend/src/api/main.py` (depends on T010)
 - [X] T012 [P] Healthcare domain schema + Python-native Synthea-style seed script (research.md §10) in `domains/healthcare/schema.sql`, `domains/healthcare/seed.py`
-- [ ] T013 [P] Fintech domain schema + Faker/PaySim-style seed script (research.md §10) in `domains/fintech/schema.sql`, `domains/fintech/seed.py`
+- [X] T013 [P] Fintech domain schema + Faker/PaySim-style seed script (research.md §10) in `domains/fintech/schema.sql`, `domains/fintech/seed.py`
 - [ ] T014 Wire both domain Postgres instances + seed scripts into Docker Compose init (depends on T005, T012, T013) in `docker-compose.yml`
 
 **Checkpoint**: Foundation ready — user story implementation can now begin.
@@ -354,5 +354,10 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   Synthea-style generator, not the actual Synthea tool — this environment
   has no JVM. `tech-stack.md`, `research.md` §10, and `plan.md` were
   amended accordingly; T072's description was updated to match.
+- T013 (2026-07-29): added a `claims` table (`member_ssn`, `tenant_id`,
+  `claim_amount`) to the fintech schema, beyond `research.md` §10's
+  original `accounts`/`transactions`/`customers` set, to match
+  `quickstart.md`'s Scenario 4/5 examples. `research.md` §10 was updated
+  accordingly.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.
 - Avoid: same-file conflicts within a `[P]` batch, and any engine code path that branches on domain name (Constitution Principle IV, checked by T067).
