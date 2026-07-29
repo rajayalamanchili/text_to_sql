@@ -31,9 +31,42 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot init jobs (T014): seed each domain's Postgres instance from its
+  # domains/<domain>/schema.sql + seed.py (T012, T013) before the backend
+  # starts serving. Same image as `backend` (built once, tagged, reused —
+  # see the shared `image:` key) since seed.py depends on the backend
+  # venv's psycopg/faker packages; `domains/` is volume-mounted rather than
+  # baked into the image, matching how `backend` already mounts it.
+  healthcare-seed:
+    build:
+      context: ./backend
+    image: steward-backend:local
+    command: ["python", "domains/healthcare/seed.py"]
+    environment:
+      HEALTHCARE_DATABASE_URL: postgresql://${HEALTHCARE_DB_USER}:${HEALTHCARE_DB_PASSWORD}@healthcare-db:5432/${HEALTHCARE_DB_NAME}
+    volumes:
+      - ./domains:/app/domains
+    depends_on:
+      healthcare-db:
+        condition: service_healthy
+
+  fintech-seed:
+    build:
+      context: ./backend
+    image: steward-backend:local
+    command: ["python", "domains/fintech/seed.py"]
+    environment:
+      FINTECH_DATABASE_URL: postgresql://${FINTECH_DB_USER}:${FINTECH_DB_PASSWORD}@fintech-db:5432/${FINTECH_DB_NAME}
+    volumes:
+      - ./domains:/app/domains
+    depends_on:
+      fintech-db:
+        condition: service_healthy
+
   backend:
     build:
       context: ./backend
+    image: steward-backend:local
     environment:
       HEALTHCARE_DATABASE_URL: postgresql://${HEALTHCARE_DB_USER}:${HEALTHCARE_DB_PASSWORD}@healthcare-db:5432/${HEALTHCARE_DB_NAME}
       FINTECH_DATABASE_URL: postgresql://${FINTECH_DB_USER}:${FINTECH_DB_PASSWORD}@fintech-db:5432/${FINTECH_DB_NAME}
@@ -48,6 +81,10 @@ services:
         condition: service_healthy
       fintech-db:
         condition: service_healthy
+      healthcare-seed:
+        condition: service_completed_successfully
+      fintech-seed:
+        condition: service_completed_successfully
 
   frontend:
     build:

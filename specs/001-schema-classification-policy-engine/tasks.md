@@ -76,7 +76,7 @@ required to prove the core guardrail claim.
 - [X] T011 FastAPI app skeleton + router registration in `backend/src/api/main.py` (depends on T010)
 - [X] T012 [P] Healthcare domain schema + Python-native Synthea-style seed script (research.md §10) in `domains/healthcare/schema.sql`, `domains/healthcare/seed.py`
 - [X] T013 [P] Fintech domain schema + Faker/PaySim-style seed script (research.md §10) in `domains/fintech/schema.sql`, `domains/fintech/seed.py`
-- [ ] T014 Wire both domain Postgres instances + seed scripts into Docker Compose init (depends on T005, T012, T013) in `docker-compose.yml`
+- [X] T014 Wire both domain Postgres instances + seed scripts into Docker Compose init (depends on T005, T012, T013) in `docker-compose.yml`
 
 **Checkpoint**: Foundation ready — user story implementation can now begin.
 
