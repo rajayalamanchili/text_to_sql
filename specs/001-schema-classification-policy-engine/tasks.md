@@ -141,10 +141,10 @@ the record `pending_review`; an `admin`-role approve returns 200, sets
 - [X] T034 [US2] `POST .../review-queue/{column_id}/reject` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
 - [X] T035 [US2] `POST .../review-queue/{column_id}/reclassify` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
 - [X] T036 [US2] Audit logging for approve/reject/reclassify actions, recording actor identity (FR-013) in `backend/src/services/audit/audit_log.py` (depends on T033, T034, T035)
-- [ ] T037 [P] [US2] Admin review queue Next.js route in `frontend/src/app/admin-review/page.tsx`
-- [ ] T038 [P] [US2] Review queue table component (column, proposed classification, confidence, source signals) in `frontend/src/app/admin-review/components/ReviewQueueTable.tsx`
-- [ ] T039 [US2] Approve/reject/reclassify actions wired to generated OpenAPI client in `frontend/src/app/admin-review/actions.ts` (depends on T032-T035, T037)
-- [ ] T040 [US2] Role-based UI guard hiding approve/reject controls from non-admin callers in `frontend/src/app/admin-review/page.tsx` (depends on T037)
+- [X] T037 [P] [US2] Admin review queue Next.js route in `frontend/src/app/admin-review/page.tsx`
+- [X] T038 [P] [US2] Review queue table component (column, proposed classification, confidence, source signals) in `frontend/src/app/admin-review/components/ReviewQueueTable.tsx`
+- [X] T039 [US2] Approve/reject/reclassify actions wired to generated OpenAPI client in `frontend/src/app/admin-review/actions.ts` (depends on T032-T035, T037)
+- [X] T040 [US2] Role-based UI guard hiding approve/reject controls from non-admin callers in `frontend/src/app/admin-review/page.tsx` (depends on T037)
 
 **Checkpoint**: US1 + US2 both work independently — schema can be classified and reviewed end to end.
 

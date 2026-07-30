@@ -16,7 +16,11 @@ from pydantic import BaseModel
 
 from src.api.deps import Caller, get_caller, get_domain_config, require_admin
 from src.config.domains import DomainConfig
-from src.models.column_classification import Classification, ClassificationStatus
+from src.models.column_classification import (
+    Classification,
+    ClassificationStatus,
+    ColumnClassification,
+)
 from src.services.audit.audit_log import AuditLogWriter, PostgresAuditLogSink
 from src.services.classification.persistence import PostgresClassificationStore
 
@@ -50,7 +54,7 @@ def approve_review_queue_column(
     domain: Annotated[DomainConfig, Depends(get_domain_config)],
     caller: Annotated[Caller, Depends(require_admin)],
     column_id: UUID,
-) -> dict:
+) -> ColumnClassification:
     """Transition a `pending_review` column to `approved`, admin-only
     (contracts/api.md, FR-013, Scenario 8). `require_admin` rejects any
     non-admin caller with 403 before this body runs, leaving the
@@ -64,9 +68,7 @@ def approve_review_queue_column(
         audit_writer = AuditLogWriter(PostgresAuditLogSink(conn))
         store = PostgresClassificationStore(conn, audit_writer=audit_writer, actor_role=caller.role)
         record = _get_pending_record_or_error(store, domain.name, column_id)
-        updated = asyncio.run(store.approve(record, reviewed_by=caller.role.value))
-
-    return updated.model_dump(mode="json")
+        return asyncio.run(store.approve(record, reviewed_by=caller.role.value))
 
 
 @router.post("/review-queue/{column_id}/reject")
@@ -74,7 +76,7 @@ def reject_review_queue_column(
     domain: Annotated[DomainConfig, Depends(get_domain_config)],
     caller: Annotated[Caller, Depends(require_admin)],
     column_id: UUID,
-) -> dict:
+) -> ColumnClassification:
     """Transition a `pending_review` column to `rejected`, admin-only.
     Same auth/audit rules as `approve` (contracts/api.md)."""
     if not domain.database_url:
@@ -86,9 +88,7 @@ def reject_review_queue_column(
         audit_writer = AuditLogWriter(PostgresAuditLogSink(conn))
         store = PostgresClassificationStore(conn, audit_writer=audit_writer, actor_role=caller.role)
         record = _get_pending_record_or_error(store, domain.name, column_id)
-        updated = asyncio.run(store.reject(record, reviewed_by=caller.role.value))
-
-    return updated.model_dump(mode="json")
+        return asyncio.run(store.reject(record, reviewed_by=caller.role.value))
 
 
 class ReclassifyRequest(BaseModel):
@@ -101,7 +101,7 @@ def reclassify_review_queue_column(
     caller: Annotated[Caller, Depends(require_admin)],
     column_id: UUID,
     body: ReclassifyRequest,
-) -> dict:
+) -> ColumnClassification:
     """Overwrite a `pending_review` column's classification with an
     admin-supplied value, set `source = "human"`, and transition to
     `approved`. Same auth/audit rules as `approve` (contracts/api.md)."""
@@ -114,13 +114,11 @@ def reclassify_review_queue_column(
         audit_writer = AuditLogWriter(PostgresAuditLogSink(conn))
         store = PostgresClassificationStore(conn, audit_writer=audit_writer, actor_role=caller.role)
         record = _get_pending_record_or_error(store, domain.name, column_id)
-        updated = asyncio.run(
+        return asyncio.run(
             store.reclassify(
                 record, classification=body.classification, reviewed_by=caller.role.value
             )
         )
-
-    return updated.model_dump(mode="json")
 
 
 def _get_pending_record_or_error(store: PostgresClassificationStore, domain: str, column_id: UUID):

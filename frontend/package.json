@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "generate:api-types": "openapi-typescript ${STEWARD_API_BASE_URL:-http://localhost:8000}/openapi.json -o src/services/api-types.ts"
   },
   "dependencies": {
     "next": "16.2.12",
@@ -23,6 +24,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "eslint-config-prettier": "^10.1.8",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.9.6",
     "tailwindcss": "^4",
     "typescript": "^5"
