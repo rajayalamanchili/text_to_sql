@@ -731,3 +731,19 @@ requirement.
   zero-coverage gap for FR-014's multi-statement-rejection requirement.
 - Success Criteria updated from ten to eleven required passing
   scenarios.
+
+### 2026-07-30 — classification→action publish-time mapping
+
+- **FR-006** clarified: `tasks.md` flagged an open gap blocking
+  T044/T045 — `ColumnClassification` has no `action` field, and
+  `contracts/policy-artifact.schema.yaml`'s example showed
+  `sensitive_category` mapping to `block` in one case (`patient_notes`)
+  and `role_gate` in another (`diagnosis_code`), with no documented
+  tie-breaking rule. Resolved: the policy-publish endpoint's automatic
+  classification→action derivation is a pure, deterministic two-outcome
+  function — `business` maps to `allow`; every other classification
+  (`pii_direct`, `pii_indirect`, `sensitive_category`) maps to `block`
+  (fail-closed default, Constitution Principle II). `role_gate` is never
+  auto-derived from classification in Milestone 1; it is only ever
+  applied as a manual, post-publish override, exactly as `tasks.md`'s
+  T064 already does for `diagnosis_code`.

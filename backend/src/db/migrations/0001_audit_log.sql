@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
         CHECK (decision IN (
             'allow', 'block', 'mask',
             'classify_auto_approved', 'classify_pending_review',
-            'classify_approved', 'classify_rejected'
+            'classify_approved', 'classify_rejected', 'policy_published'
         )),
     reason_code TEXT
         CHECK (reason_code IN (

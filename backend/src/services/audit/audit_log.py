@@ -38,6 +38,12 @@ class Decision(StrEnum):
     CLASSIFY_PENDING_REVIEW = "classify_pending_review"
     CLASSIFY_APPROVED = "classify_approved"
     CLASSIFY_REJECTED = "classify_rejected"
+    # Not one of FR-010's "classification decision"/"enforcement decision"
+    # categories by name, but contracts/api.md requires policy/publish to
+    # write an AuditLogEntry, and data-model.md's enum had no slot for it
+    # (spec.md Amendments, 2026-07-30) — added here rather than left
+    # unaudited, per Constitution Principle VIII.
+    POLICY_PUBLISHED = "policy_published"
 
 
 class ReasonCode(StrEnum):

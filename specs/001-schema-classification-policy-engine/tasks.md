@@ -178,11 +178,11 @@ domain/time/decision (NFR-004).
 
 ### Implementation for User Story 3
 
-- [ ] T043 [P] [US3] `PolicyArtifact`/`PolicyTable`/`PolicyColumn` Pydantic models (data-model.md) in `backend/src/models/policy_artifact.py`
-- [ ] T044 [US3] Policy store: versioned YAML read/write + manifest-based active-version resolution (research.md §6) in `backend/src/services/policy/policy_store.py` (depends on T043)
+- [X] T043 [P] [US3] `PolicyArtifact`/`PolicyTable`/`PolicyColumn` Pydantic models (data-model.md) in `backend/src/models/policy_artifact.py`
+- [X] T044 [US3] Policy store: versioned YAML read/write + manifest-based active-version resolution (research.md §6) in `backend/src/services/policy/policy_store.py` (depends on T043)
 - [ ] T044a [US3] Unit test: a policy publish occurring mid-evaluation of an in-flight query does not affect that query's resolved policy version — the version is read once at the start of enforcement and reused for every check (FR-007) in `backend/tests/unit/test_policy_version_pinning.py` (depends on T044, T048)
-- [ ] T045 [US3] `POST /domains/{domain}/policy/publish` endpoint, admin-only, built from all `approved` classifications (contracts/api.md) in `backend/src/api/policy.py` (depends on T044, T027)
-- [ ] T046 [US3] `GET /domains/{domain}/policy` endpoint in `backend/src/api/policy.py` (depends on T044)
+- [X] T045 [US3] `POST /domains/{domain}/policy/publish` endpoint, admin-only, built from all `approved` classifications (contracts/api.md) in `backend/src/api/policy.py` (depends on T044, T027)
+- [X] T046 [US3] `GET /domains/{domain}/policy` endpoint in `backend/src/api/policy.py` (depends on T044)
 - [ ] T047 [US3] `sqlglot`-based column resolver: `SELECT *`, joins, CTEs, subqueries → concrete `table.column` (research.md §5) in `backend/src/services/enforcement/column_resolver.py`
 - [ ] T048 [US3] Deterministic enforcement node: `allow`/`block` decision + default-closed for any unresolved or policy-absent column (FR-007, FR-009); on policy-load failure or unexpected internal error, reject with reason `ENFORCEMENT_ERROR` (FR-007, Scenario 11); when multiple violations co-occur, report by severity ranking, not AST scan order (FR-007) in `backend/src/services/enforcement/enforcer.py` (depends on T047, T044)
 - [ ] T049 [US3] Minimal SQL proposal step (accepts `question` or raw `sql`, per spec "Out of Scope" — not production NL→SQL quality) in `backend/src/services/generation/sql_proposal.py`
@@ -367,17 +367,13 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   (`contracts/api.md`) and task T027a to implement it; T032
   (`/review-queue`) now explicitly depends on T027a as a filtered view
   of the same store rather than a separate one.
-- **Open gap for T044/T045** (not blocking T015-T017, flagged for
-  whoever picks up policy publish): `ColumnClassification` has no
-  `action` field (data-model.md) — `PolicyColumn.action` must be derived
-  from `classification` at publish time, and `contracts/policy-artifact.schema.yaml`'s
-  example shows this mapping is NOT a pure 1:1 function: `pii_direct`
-  consistently maps to `block` (both examples; T015's Scenario 1 test
-  relies on only this much), but `sensitive_category` maps to `block` in
-  one example (`patient_notes`) and `role_gate` in another
-  (`diagnosis_code`) — implying `action` for at least `sensitive_category`
-  needs either an explicit admin choice (via reclassify/approve) or a
-  documented tie-breaking rule, neither of which exists yet. Resolve
-  before implementing T044/T045.
+- **Resolved 2026-07-30** (was: open gap for T044/T045): `ColumnClassification`
+  has no `action` field (data-model.md) — `PolicyColumn.action` is derived
+  from `classification` at publish time via a pure, deterministic
+  two-outcome function: `business` → `allow`, every other classification
+  (`pii_direct`, `pii_indirect`, `sensitive_category`) → `block`
+  (fail-closed default). `role_gate` is never auto-derived in Milestone 1;
+  it's only ever a manual, post-publish override (see T064 for
+  `diagnosis_code`). See spec.md Amendments, 2026-07-30.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.
 - Avoid: same-file conflicts within a `[P]` batch, and any engine code path that branches on domain name (Constitution Principle IV, checked by T067).

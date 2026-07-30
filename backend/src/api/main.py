@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.api import classify, review_queue, schema
+from src.api import classify, policy, review_queue, schema
 from src.api.deps import AdminRoleRequiredError
 from src.services.audit.audit_log import configure_logging
 
@@ -60,7 +60,8 @@ def health() -> dict[str, str]:
 app.include_router(schema.router)
 app.include_router(classify.router)
 app.include_router(review_queue.router)
+app.include_router(policy.router)
 
 # Remaining domain routers are registered below as their tasks land, e.g.:
-#     from src.api import policy, query, audit
+#     from src.api import query, audit
 #     ...
