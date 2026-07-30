@@ -117,6 +117,70 @@ def test_save_without_audit_writer_does_not_raise():
     asyncio.run(store.save(_record()))  # no audit_writer configured — should be a no-op
 
 
+def test_approve_transitions_status_and_writes_audit_entry_with_actor_role():
+    conn, _cursor = _fake_conn()
+    audit_writer = _FakeAuditWriter()
+    store = PostgresClassificationStore(conn, audit_writer=audit_writer, actor_role=ActorRole.ADMIN)
+    record = _record(status=ClassificationStatus.PENDING_REVIEW)
+
+    updated = asyncio.run(store.approve(record, reviewed_by=ActorRole.ADMIN.value))
+
+    assert updated.status == ClassificationStatus.APPROVED
+    assert updated.reviewed_by == "admin"
+    assert updated.reviewed_at is not None
+    assert len(audit_writer.written) == 1
+    entry = audit_writer.written[0]
+    assert entry.decision == Decision.CLASSIFY_APPROVED
+    assert entry.actor_role == ActorRole.ADMIN
+    assert entry.query_id == updated.id
+
+
+def test_reject_transitions_status_and_writes_audit_entry_with_actor_role():
+    conn, _cursor = _fake_conn()
+    audit_writer = _FakeAuditWriter()
+    store = PostgresClassificationStore(conn, audit_writer=audit_writer, actor_role=ActorRole.ADMIN)
+    record = _record(status=ClassificationStatus.PENDING_REVIEW)
+
+    updated = asyncio.run(store.reject(record, reviewed_by=ActorRole.ADMIN.value))
+
+    assert updated.status == ClassificationStatus.REJECTED
+    assert updated.reviewed_by == "admin"
+    assert updated.reviewed_at is not None
+    assert len(audit_writer.written) == 1
+    entry = audit_writer.written[0]
+    assert entry.decision == Decision.CLASSIFY_REJECTED
+    assert entry.actor_role == ActorRole.ADMIN
+    assert entry.query_id == updated.id
+
+
+def test_reclassify_overwrites_classification_and_writes_audit_entry():
+    conn, _cursor = _fake_conn()
+    audit_writer = _FakeAuditWriter()
+    store = PostgresClassificationStore(conn, audit_writer=audit_writer, actor_role=ActorRole.ADMIN)
+    record = _record(
+        status=ClassificationStatus.PENDING_REVIEW,
+        classification=Classification.UNCLASSIFIED,
+        source=ClassificationSource.HEURISTIC,
+    )
+
+    updated = asyncio.run(
+        store.reclassify(
+            record, classification=Classification.PII_DIRECT, reviewed_by=ActorRole.ADMIN.value
+        )
+    )
+
+    assert updated.classification == Classification.PII_DIRECT
+    assert updated.source == ClassificationSource.HUMAN
+    assert updated.status == ClassificationStatus.APPROVED
+    assert updated.reviewed_by == "admin"
+    assert updated.reviewed_at is not None
+    assert len(audit_writer.written) == 1
+    entry = audit_writer.written[0]
+    assert entry.decision == Decision.CLASSIFY_APPROVED
+    assert entry.actor_role == ActorRole.ADMIN
+    assert entry.query_id == updated.id
+
+
 def test_list_records_converts_rows_back_to_column_classification():
     conn, cursor = _fake_conn()
     store = PostgresClassificationStore(conn)

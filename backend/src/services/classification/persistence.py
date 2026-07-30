@@ -19,6 +19,7 @@ saves from one `PostgresClassificationStore` instance share a single
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -79,6 +80,27 @@ _SELECT_SQL = """
       AND (%(table_name)s::text IS NULL OR table_name = %(table_name)s)
       AND (%(column_name)s::text IS NULL OR column_name = %(column_name)s)
     ORDER BY table_name, column_name
+"""
+
+_SELECT_BY_ID_SQL = """
+    SELECT id, domain, table_name, column_name, data_type, cardinality_ratio,
+           classification, heuristic_score, llm_score, confidence, source,
+           status, reviewed_by, reviewed_at, llm_rationale
+    FROM column_classifications
+    WHERE domain = %(domain)s AND id = %(id)s
+"""
+
+_UPDATE_REVIEW_SQL = """
+    UPDATE column_classifications
+    SET status = %(status)s, reviewed_by = %(reviewed_by)s, reviewed_at = %(reviewed_at)s
+    WHERE id = %(id)s
+"""
+
+_UPDATE_RECLASSIFY_SQL = """
+    UPDATE column_classifications
+    SET classification = %(classification)s, source = %(source)s, status = %(status)s,
+        reviewed_by = %(reviewed_by)s, reviewed_at = %(reviewed_at)s
+    WHERE id = %(id)s
 """
 
 
@@ -146,6 +168,127 @@ class PostgresClassificationStore:
             )
             rows = cur.fetchall()
         return [_row_to_record(row) for row in rows]
+
+    def get_by_id(self, domain: str, column_id: UUID) -> ColumnClassification | None:
+        with self._conn.cursor() as cur:
+            cur.execute(_SELECT_BY_ID_SQL, {"domain": domain, "id": column_id})
+            row = cur.fetchone()
+        return _row_to_record(row) if row is not None else None
+
+    async def approve(
+        self, record: ColumnClassification, *, reviewed_by: str
+    ) -> ColumnClassification:
+        """Transition `record` from `pending_review` to `approved`
+        (data-model.md State Transitions), setting `reviewed_by`/
+        `reviewed_at` and writing a `classify_approved` `AuditLogEntry`
+        keyed by the column's own id, since this action — unlike a
+        `/classify` run — has no shared `run_id` to correlate against
+        (contracts/api.md, Scenario 8)."""
+        updated = record.model_copy(
+            update={
+                "status": ClassificationStatus.APPROVED,
+                "reviewed_by": reviewed_by,
+                "reviewed_at": datetime.now(UTC),
+            }
+        )
+        with self._conn.cursor() as cur:
+            cur.execute(
+                _UPDATE_REVIEW_SQL,
+                {
+                    "id": updated.id,
+                    "status": updated.status.value,
+                    "reviewed_by": updated.reviewed_by,
+                    "reviewed_at": updated.reviewed_at,
+                },
+            )
+        self._conn.commit()
+        if self._audit_writer is not None:
+            await self._audit_writer.write(
+                AuditLogEntry.create(
+                    domain=updated.domain,
+                    query_id=updated.id,
+                    actor_role=self._actor_role,
+                    decision=Decision.CLASSIFY_APPROVED,
+                )
+            )
+        return updated
+
+    async def reject(
+        self, record: ColumnClassification, *, reviewed_by: str
+    ) -> ColumnClassification:
+        """Transition `record` from `pending_review` to `rejected`
+        (data-model.md State Transitions), setting `reviewed_by`/
+        `reviewed_at` and writing a `classify_rejected` `AuditLogEntry`
+        keyed by the column's own id, mirroring `approve` (contracts/api.md)."""
+        updated = record.model_copy(
+            update={
+                "status": ClassificationStatus.REJECTED,
+                "reviewed_by": reviewed_by,
+                "reviewed_at": datetime.now(UTC),
+            }
+        )
+        with self._conn.cursor() as cur:
+            cur.execute(
+                _UPDATE_REVIEW_SQL,
+                {
+                    "id": updated.id,
+                    "status": updated.status.value,
+                    "reviewed_by": updated.reviewed_by,
+                    "reviewed_at": updated.reviewed_at,
+                },
+            )
+        self._conn.commit()
+        if self._audit_writer is not None:
+            await self._audit_writer.write(
+                AuditLogEntry.create(
+                    domain=updated.domain,
+                    query_id=updated.id,
+                    actor_role=self._actor_role,
+                    decision=Decision.CLASSIFY_REJECTED,
+                )
+            )
+        return updated
+
+    async def reclassify(
+        self, record: ColumnClassification, *, classification: Classification, reviewed_by: str
+    ) -> ColumnClassification:
+        """Overwrite `record`'s classification with an admin-supplied
+        value, set `source = "human"`, and transition to `approved`
+        (contracts/api.md `reclassify`, data-model.md State Transitions).
+        Writes a `classify_approved` `AuditLogEntry`, same decision as a
+        plain `approve` since the resulting status is identical."""
+        updated = record.model_copy(
+            update={
+                "classification": classification,
+                "source": ClassificationSource.HUMAN,
+                "status": ClassificationStatus.APPROVED,
+                "reviewed_by": reviewed_by,
+                "reviewed_at": datetime.now(UTC),
+            }
+        )
+        with self._conn.cursor() as cur:
+            cur.execute(
+                _UPDATE_RECLASSIFY_SQL,
+                {
+                    "id": updated.id,
+                    "classification": updated.classification.value,
+                    "source": updated.source.value,
+                    "status": updated.status.value,
+                    "reviewed_by": updated.reviewed_by,
+                    "reviewed_at": updated.reviewed_at,
+                },
+            )
+        self._conn.commit()
+        if self._audit_writer is not None:
+            await self._audit_writer.write(
+                AuditLogEntry.create(
+                    domain=updated.domain,
+                    query_id=updated.id,
+                    actor_role=self._actor_role,
+                    decision=Decision.CLASSIFY_APPROVED,
+                )
+            )
+        return updated
 
 
 def _row_to_record(row: tuple) -> ColumnClassification:

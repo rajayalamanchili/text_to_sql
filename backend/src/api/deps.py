@@ -9,7 +9,9 @@ guards them.
 
 from __future__ import annotations
 
-from fastapi import Header, HTTPException
+from typing import Annotated
+
+from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from src.config.domains import DomainConfig, UnknownDomainError, get_domain
@@ -51,6 +53,26 @@ def get_caller(
     tenant_id = x_steward_tenant.strip() if x_steward_tenant and x_steward_tenant.strip() else None
 
     return Caller(role=role, tenant_id=tenant_id)
+
+
+class AdminRoleRequiredError(HTTPException):
+    """Raised by `require_admin` for a non-admin caller on an admin-only
+    endpoint (contracts/api.md: `{ error: "admin role required" }`,
+    Scenario 8). Rendered by the handler registered in `main.py` so the
+    403 body matches the contract's `error` key rather than FastAPI's
+    default `detail` key."""
+
+    def __init__(self) -> None:
+        super().__init__(status_code=403, detail="admin role required")
+
+
+def require_admin(caller: Annotated[Caller, Depends(get_caller)]) -> Caller:
+    """Gate an admin-only endpoint (FR-013). A non-admin caller gets a
+    403 and must leave the underlying record unchanged — enforced by the
+    caller never reaching the record mutation below this dependency."""
+    if caller.role != ActorRole.ADMIN:
+        raise AdminRoleRequiredError()
+    return caller
 
 
 def get_domain_config(domain: str) -> DomainConfig:

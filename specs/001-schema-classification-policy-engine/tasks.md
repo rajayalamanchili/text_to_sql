@@ -136,11 +136,11 @@ the record `pending_review`; an `admin`-role approve returns 200, sets
 
 ### Implementation for User Story 2
 
-- [ ] T032 [US2] `GET /domains/{domain}/review-queue` endpoint — a `status == "pending_review"`-filtered view of T027a's classification store, not a separate one (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T018, T011, T027a)
-- [ ] T033 [US2] `POST .../review-queue/{column_id}/approve` endpoint, admin-only (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T032)
-- [ ] T034 [US2] `POST .../review-queue/{column_id}/reject` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
-- [ ] T035 [US2] `POST .../review-queue/{column_id}/reclassify` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
-- [ ] T036 [US2] Audit logging for approve/reject/reclassify actions, recording actor identity (FR-013) in `backend/src/services/audit/audit_log.py` (depends on T033, T034, T035)
+- [X] T032 [US2] `GET /domains/{domain}/review-queue` endpoint — a `status == "pending_review"`-filtered view of T027a's classification store, not a separate one (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T018, T011, T027a)
+- [X] T033 [US2] `POST .../review-queue/{column_id}/approve` endpoint, admin-only (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T032)
+- [X] T034 [US2] `POST .../review-queue/{column_id}/reject` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
+- [X] T035 [US2] `POST .../review-queue/{column_id}/reclassify` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
+- [X] T036 [US2] Audit logging for approve/reject/reclassify actions, recording actor identity (FR-013) in `backend/src/services/audit/audit_log.py` (depends on T033, T034, T035)
 - [ ] T037 [P] [US2] Admin review queue Next.js route in `frontend/src/app/admin-review/page.tsx`
 - [ ] T038 [P] [US2] Review queue table component (column, proposed classification, confidence, source signals) in `frontend/src/app/admin-review/components/ReviewQueueTable.tsx`
 - [ ] T039 [US2] Approve/reject/reclassify actions wired to generated OpenAPI client in `frontend/src/app/admin-review/actions.ts` (depends on T032-T035, T037)
