@@ -231,6 +231,63 @@ class PostgresAuditLogSink:
             )
         self._conn.commit()
 
+    def list_entries(
+        self,
+        *,
+        from_ts: datetime | None = None,
+        to_ts: datetime | None = None,
+        decision: Decision | None = None,
+    ) -> list[AuditLogEntry]:
+        """List entries from this connection's domain audit log,
+        optionally filtered by a `[from_ts, to_ts]` time range and/or
+        `decision` (contracts/api.md's `GET /audit-log`, NFR-004)."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, "timestamp", domain, query_id, actor_role, decision,
+                       reason_code, reason_message, policy_version_used, raw_query_hash
+                FROM audit_log
+                WHERE (%(from_ts)s::timestamptz IS NULL OR "timestamp" >= %(from_ts)s)
+                  AND (%(to_ts)s::timestamptz IS NULL OR "timestamp" <= %(to_ts)s)
+                  AND (%(decision)s::text IS NULL OR decision = %(decision)s)
+                ORDER BY "timestamp" DESC
+                """,
+                {
+                    "from_ts": from_ts,
+                    "to_ts": to_ts,
+                    "decision": decision.value if decision is not None else None,
+                },
+            )
+            rows = cur.fetchall()
+        return [_row_to_entry(row) for row in rows]
+
+
+def _row_to_entry(row: tuple) -> AuditLogEntry:
+    (
+        id_,
+        timestamp,
+        domain,
+        query_id,
+        actor_role,
+        decision,
+        reason_code,
+        reason_message,
+        policy_version_used,
+        raw_query_hash,
+    ) = row
+    return AuditLogEntry(
+        id=id_,
+        timestamp=timestamp,
+        domain=domain,
+        query_id=query_id,
+        actor_role=ActorRole(actor_role),
+        decision=Decision(decision),
+        reason_code=ReasonCode(reason_code) if reason_code is not None else None,
+        reason_message=reason_message,
+        policy_version_used=policy_version_used,
+        raw_query_hash=raw_query_hash,
+    )
+
 
 class AuditLogWriter:
     """Writes one `AuditLogEntry` to the structured event log (always) and,

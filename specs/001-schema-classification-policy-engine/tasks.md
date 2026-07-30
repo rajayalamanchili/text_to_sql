@@ -193,9 +193,9 @@ domain/time/decision (NFR-004).
 - [X] T054 [P] [US3] BDD step defs for Scenario 10 (irrelevant question does not leak schema or bypass enforcement) in `backend/tests/integration/test_scenario10_irrelevant_question.py`
 - [X] T055 [US3] DML/non-`SELECT` statement guard: reject any statement whose `sqlglot`-parsed root is not a single `SELECT`, including input that parses into more than one statement (reason `MULTIPLE_STATEMENTS_REJECTED`), before any column/table policy check (FR-014, research.md §5) in `backend/src/services/enforcement/enforcer.py` (depends on T047)
 - [X] T056 [US3] Irrelevant-question handling in the query graph: no schema-relevant mapping → return `"question not mapped to schema"` without generating or executing SQL (FR-014, Scenario 10) in `backend/src/graph/query_graph.py` (depends on T050)
-- [ ] T057 [US3] `GET /audit-log` endpoint with domain/time-range/decision-type filters (contracts/api.md, NFR-004) in `backend/src/api/audit.py` (depends on T008, T009)
-- [ ] T057a [P] [US3] BDD step defs for Scenario 11 (enforcement-path failure fails closed, reason `ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario11_enforcement_error.py`
-- [ ] T052a [US3] Unit test: when a query trips multiple independent policy violations simultaneously, the reported reason follows FR-007's severity ranking (`ENFORCEMENT_ERROR`/`NO_ACTIVE_POLICY`/`COLUMN_BLOCKED` > `ROLE_GATE_MISMATCH` > row-policy injection), not AST scan order in `backend/tests/unit/test_enforcement_severity_ranking.py` (depends on T048)
+- [X] T057 [US3] `GET /audit-log` endpoint with domain/time-range/decision-type filters (contracts/api.md, NFR-004) in `backend/src/api/audit.py` (depends on T008, T009)
+- [X] T057a [P] [US3] BDD step defs for Scenario 11 (enforcement-path failure fails closed, reason `ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario11_enforcement_error.py`
+- [X] T052a [US3] Unit test: when a query trips multiple independent policy violations simultaneously, the reported reason follows FR-007's severity ranking (`ENFORCEMENT_ERROR`/`NO_ACTIVE_POLICY`/`COLUMN_BLOCKED` > `ROLE_GATE_MISMATCH` > row-policy injection), not AST scan order in `backend/tests/unit/test_enforcement_severity_ranking.py` (depends on T048)
 
 **Checkpoint**: US1 + US2 + US3 complete — this is the MVP. The core Constitution Principle I/II/VIII guarantee (classify, review, enforce-closed, DML-safe, auditable) is fully demoable.
 

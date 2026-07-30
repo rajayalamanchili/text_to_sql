@@ -1,8 +1,7 @@
 """FastAPI app skeleton (plan.md Project Structure).
 
 Domain-specific routers (schema, classify, review_queue, policy, query,
-audit) are added here via `app.include_router(...)` as their own tasks
-build them — none exist yet at this stage.
+audit) are registered here via `app.include_router(...)`.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.api import classify, policy, query, review_queue, schema
+from src.api import audit, classify, policy, query, review_queue, schema
 from src.api.deps import AdminRoleRequiredError
 from src.services.audit.audit_log import configure_logging
 
@@ -62,7 +61,4 @@ app.include_router(classify.router)
 app.include_router(review_queue.router)
 app.include_router(policy.router)
 app.include_router(query.router)
-
-# Remaining domain routers are registered below as their tasks land, e.g.:
-#     from src.api import audit
-#     ...
+app.include_router(audit.router)

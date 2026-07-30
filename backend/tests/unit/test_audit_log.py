@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -185,3 +186,56 @@ def test_postgres_sink_inserts_entry_and_commits():
     assert params["decision"] == "classify_auto_approved"
     assert params["reason_code"] is None
     conn.commit.assert_called_once()
+
+
+def _audit_row(**overrides):
+    row = {
+        "id": uuid.uuid4(),
+        "timestamp": datetime.now(UTC),
+        "domain": "fintech",
+        "query_id": uuid.uuid4(),
+        "actor_role": "analyst",
+        "decision": "block",
+        "reason_code": "COLUMN_BLOCKED",
+        "reason_message": "column blocked by policy: member_ssn",
+        "policy_version_used": 1,
+        "raw_query_hash": "abc123",
+    }
+    row.update(overrides)
+    return tuple(row.values())
+
+
+def test_list_entries_passes_filters_and_maps_rows(monkeypatch):
+    conn, cursor = _fake_conn()
+    rows = [_audit_row()]
+    cursor.fetchall.return_value = rows
+    sink = PostgresAuditLogSink(conn)
+    cursor.execute.reset_mock()
+
+    from_ts = datetime.now(UTC)
+    to_ts = datetime.now(UTC)
+    entries = sink.list_entries(from_ts=from_ts, to_ts=to_ts, decision=Decision.BLOCK)
+
+    (query, params), _ = cursor.execute.call_args
+    assert "SELECT" in query
+    assert "FROM audit_log" in query
+    assert params["from_ts"] == from_ts
+    assert params["to_ts"] == to_ts
+    assert params["decision"] == "block"
+    assert len(entries) == 1
+    assert entries[0].decision == Decision.BLOCK
+    assert entries[0].reason_code == ReasonCode.COLUMN_BLOCKED
+    assert entries[0].domain == "fintech"
+
+
+def test_list_entries_with_no_filters_passes_nulls():
+    conn, cursor = _fake_conn()
+    cursor.fetchall.return_value = []
+    sink = PostgresAuditLogSink(conn)
+    cursor.execute.reset_mock()
+
+    entries = sink.list_entries()
+
+    (_, params), _ = cursor.execute.call_args
+    assert params == {"from_ts": None, "to_ts": None, "decision": None}
+    assert entries == []
