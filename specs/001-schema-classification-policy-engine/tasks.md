@@ -173,8 +173,8 @@ domain/time/decision (NFR-004).
 
 ### Tests for User Story 3
 
-- [ ] T041 [P] [US3] BDD step defs for Scenario 4 (deterministic guardrail overrides incorrect LLM proposal) in `backend/tests/integration/test_scenario4_block_override.py`
-- [ ] T042 [P] [US3] BDD step defs for Scenario 6 (unclassified column defaults to blocked) in `backend/tests/integration/test_scenario6_default_closed.py`
+- [X] T041 [P] [US3] BDD step defs for Scenario 4 (deterministic guardrail overrides incorrect LLM proposal) in `backend/tests/integration/test_scenario4_block_override.py`
+- [X] T042 [P] [US3] BDD step defs for Scenario 6 (unclassified column defaults to blocked) in `backend/tests/integration/test_scenario6_default_closed.py`
 
 ### Implementation for User Story 3
 
