@@ -33,6 +33,51 @@ def test_scenario6_no_active_policy_message_matches_spec():
     assert render_reason_message(ReasonCode.NO_ACTIVE_POLICY) == "schema not yet classified"
 
 
+def test_create_accepts_a_prerendered_reason_message_directly():
+    """T052: an enforcement decision (T048's `EnforcementResult`) already
+    renders its own `reason_message` via `render_reason_message` at the
+    point the decision is made — `create()` must accept that message
+    as-is rather than forcing every caller to re-derive `reason_params`
+    just to re-render the same template a second time."""
+    entry = AuditLogEntry.create(
+        domain="fintech",
+        query_id=uuid.uuid4(),
+        actor_role=ActorRole.ANALYST,
+        decision=Decision.BLOCK,
+        reason_code=ReasonCode.COLUMN_BLOCKED,
+        reason_message="column blocked by policy: member_ssn",
+        policy_version_used=3,
+    )
+
+    assert entry.reason_message == "column blocked by policy: member_ssn"
+
+
+def test_create_rejects_both_reason_params_and_reason_message():
+    with pytest.raises(ValueError, match="not both"):
+        AuditLogEntry.create(
+            domain="fintech",
+            query_id=uuid.uuid4(),
+            actor_role=ActorRole.ANALYST,
+            decision=Decision.BLOCK,
+            reason_code=ReasonCode.COLUMN_BLOCKED,
+            reason_params={"column": "member_ssn"},
+            reason_message="column blocked by policy: member_ssn",
+        )
+
+
+def test_create_with_allow_decision_and_no_reason_code():
+    entry = AuditLogEntry.create(
+        domain="fintech",
+        query_id=uuid.uuid4(),
+        actor_role=ActorRole.ANALYST,
+        decision=Decision.ALLOW,
+        policy_version_used=3,
+    )
+
+    assert entry.reason_code is None
+    assert entry.reason_message is None
+
+
 def test_scenario7_role_gate_message_matches_spec():
     message = render_reason_message(ReasonCode.ROLE_GATE_MISMATCH, role="admin")
 

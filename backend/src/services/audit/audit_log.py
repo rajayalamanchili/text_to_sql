@@ -117,16 +117,27 @@ class AuditLogEntry(BaseModel):
         decision: Decision,
         reason_code: ReasonCode | None = None,
         reason_params: dict[str, Any] | None = None,
+        reason_message: str | None = None,
         policy_version_used: int | None = None,
         raw_query_hash: str | None = None,
     ) -> AuditLogEntry:
         """Build an entry, rendering `reason_message` from `reason_code`'s
-        template so callers never author a message string by hand."""
-        reason_message = (
-            render_reason_message(reason_code, **(reason_params or {}))
-            if reason_code is not None
-            else None
-        )
+        template so classification-stage callers never author a message
+        string by hand (`reason_params`, e.g. `classify_*` decisions).
+
+        Enforcement decisions (T048's `enforce()`) already render their own
+        `reason_message` via the same `render_reason_message` template
+        function, since the decision and its message are produced together
+        as one `EnforcementResult` — passing that pre-rendered message
+        through as `reason_message` here avoids re-deriving it from
+        `reason_params` a second time, and avoids importing
+        `enforcer.EnforcementResult` into this module (which would create
+        a circular import, since `enforcer.py` already imports from here).
+        `reason_message` and `reason_params` are mutually exclusive."""
+        if reason_message is not None and reason_params is not None:
+            raise ValueError("pass either `reason_params` or `reason_message`, not both")
+        if reason_message is None and reason_code is not None:
+            reason_message = render_reason_message(reason_code, **(reason_params or {}))
         return cls(
             id=uuid4(),
             timestamp=datetime.now(UTC),

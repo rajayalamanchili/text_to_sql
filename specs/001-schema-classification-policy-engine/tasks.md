@@ -185,10 +185,10 @@ domain/time/decision (NFR-004).
 - [X] T046 [US3] `GET /domains/{domain}/policy` endpoint in `backend/src/api/policy.py` (depends on T044)
 - [X] T047 [US3] `sqlglot`-based column resolver: `SELECT *`, joins, CTEs, subqueries → concrete `table.column` (research.md §5) in `backend/src/services/enforcement/column_resolver.py`
 - [X] T048 [US3] Deterministic enforcement node: `allow`/`block` decision + default-closed for any unresolved or policy-absent column (FR-007, FR-009); on policy-load failure or unexpected internal error, reject with reason `ENFORCEMENT_ERROR` (FR-007, Scenario 11); when multiple violations co-occur, report by severity ranking, not AST scan order (FR-007) in `backend/src/services/enforcement/enforcer.py` (depends on T047, T044)
-- [ ] T049 [US3] Minimal SQL proposal step (accepts `question` or raw `sql`, per spec "Out of Scope" — not production NL→SQL quality) in `backend/src/services/generation/sql_proposal.py`
-- [ ] T050 [US3] Query LangGraph graph: generate → deterministic enforce → execute (only if passed) → audit (research.md §9) in `backend/src/graph/query_graph.py` (depends on T048, T049)
-- [ ] T051 [US3] `POST /domains/{domain}/query` endpoint (contracts/api.md) in `backend/src/api/query.py` (depends on T050)
-- [ ] T052 [US3] Enforcement-decision audit logging: `decision` (allow/block/mask) + `reason_code` + rendered `reason_message`, per the FR-010 enum (T009) in `backend/src/services/audit/audit_log.py` (depends on T048, T009)
+- [X] T049 [US3] Minimal SQL proposal step (accepts `question` or raw `sql`, per spec "Out of Scope" — not production NL→SQL quality) in `backend/src/services/generation/sql_proposal.py`
+- [X] T050 [US3] Query LangGraph graph: generate → deterministic enforce → execute (only if passed) → audit (research.md §9) in `backend/src/graph/query_graph.py` (depends on T048, T049)
+- [X] T051 [US3] `POST /domains/{domain}/query` endpoint (contracts/api.md) in `backend/src/api/query.py` (depends on T050)
+- [X] T052 [US3] Enforcement-decision audit logging: `decision` (allow/block/mask) + `reason_code` + rendered `reason_message`, per the FR-010 enum (T009) in `backend/src/services/audit/audit_log.py` (depends on T048, T009)
 - [ ] T053 [P] [US3] BDD step defs for Scenario 9 (DML-attempt statement rejected unconditionally, including stacked multi-statement input rejected with reason `MULTIPLE_STATEMENTS_REJECTED`, FR-014) in `backend/tests/integration/test_scenario9_dml_rejected.py`
 - [ ] T054 [P] [US3] BDD step defs for Scenario 10 (irrelevant question does not leak schema or bypass enforcement) in `backend/tests/integration/test_scenario10_irrelevant_question.py`
 - [ ] T055 [US3] DML/non-`SELECT` statement guard: reject any statement whose `sqlglot`-parsed root is not a single `SELECT`, including input that parses into more than one statement (reason `MULTIPLE_STATEMENTS_REJECTED`), before any column/table policy check (FR-014, research.md §5) in `backend/src/services/enforcement/enforcer.py` (depends on T047)
@@ -375,5 +375,22 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   (fail-closed default). `role_gate` is never auto-derived in Milestone 1;
   it's only ever a manual, post-publish override (see T064 for
   `diagnosis_code`). See spec.md Amendments, 2026-07-30.
+- **Open gaps for T054/T056** (not blocking T049/T050, flagged for
+  whoever picks up Scenario 10): (1) `sql_proposal.py`'s `propose_sql`
+  (T049) matches a question's tokens against known table/column names
+  only — FR-014 also calls for matching against "a policy-configured
+  synonym list," but no synonym field exists anywhere in
+  `PolicyArtifact`/`policy-artifact.schema.yaml` (data-model.md). This is
+  a conservative gap (more questions look unmapped, never fewer — never
+  an over-match/security issue), not a correctness bug, but the schema
+  extension needed to close it hasn't been designed. (2) `query_graph.py`
+  (T050) does not catch `QuestionNotMappedError` — it's left to propagate
+  as a plain exception. `Decision`'s enum (`allow`/`block`/`mask`/
+  `classify_*`/`policy_published`) has no value that correctly represents
+  "no policy was evaluated at all" (spec.md explicitly says this is
+  neither an `allow` nor a `block`), so T056 needs to resolve what
+  `decision` value the required audit-log entry gets before wiring the
+  actual graph branch and HTTP-200 response — likely needs its own
+  `/speckit.clarify` note, similar to the T044/T045 gap resolved above.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.
 - Avoid: same-file conflicts within a `[P]` batch, and any engine code path that branches on domain name (Constitution Principle IV, checked by T067).
