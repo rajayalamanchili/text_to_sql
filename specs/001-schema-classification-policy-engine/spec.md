@@ -747,3 +747,19 @@ requirement.
   auto-derived from classification in Milestone 1; it is only ever
   applied as a manual, post-publish override, exactly as `tasks.md`'s
   T064 already does for `diagnosis_code`.
+
+### 2026-07-30 — `QUESTION_NOT_MAPPED` audit-log decision value
+
+- **FR-010** clarified: Scenario 10's outcome (`QUESTION_NOT_MAPPED`) is
+  explicitly "neither an `allow` nor a `block`" (no policy was violated;
+  the question simply never mapped to schema), but the `AuditLogEntry.decision`
+  enum (data-model.md) had no value representing that — a real gap
+  blocking T056, flagged when T050 was built. Resolved: added
+  `Decision.QUESTION_NOT_MAPPED`, alongside the same-shaped
+  `Decision.POLICY_PUBLISHED` addition from earlier this session. The
+  query graph now catches `QuestionNotMappedError` before ever reaching
+  the enforcement node, logs exactly one `AuditLogEntry` with this new
+  decision value (`raw_query_hash`/`policy_version_used` both null, since
+  neither SQL nor a policy version is ever resolved for this outcome),
+  and skips SQL generation/execution entirely — satisfying FR-010's
+  "every reason code, without exemption" rule for this case.

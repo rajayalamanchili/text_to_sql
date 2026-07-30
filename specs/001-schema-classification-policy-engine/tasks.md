@@ -189,10 +189,10 @@ domain/time/decision (NFR-004).
 - [X] T050 [US3] Query LangGraph graph: generate → deterministic enforce → execute (only if passed) → audit (research.md §9) in `backend/src/graph/query_graph.py` (depends on T048, T049)
 - [X] T051 [US3] `POST /domains/{domain}/query` endpoint (contracts/api.md) in `backend/src/api/query.py` (depends on T050)
 - [X] T052 [US3] Enforcement-decision audit logging: `decision` (allow/block/mask) + `reason_code` + rendered `reason_message`, per the FR-010 enum (T009) in `backend/src/services/audit/audit_log.py` (depends on T048, T009)
-- [ ] T053 [P] [US3] BDD step defs for Scenario 9 (DML-attempt statement rejected unconditionally, including stacked multi-statement input rejected with reason `MULTIPLE_STATEMENTS_REJECTED`, FR-014) in `backend/tests/integration/test_scenario9_dml_rejected.py`
-- [ ] T054 [P] [US3] BDD step defs for Scenario 10 (irrelevant question does not leak schema or bypass enforcement) in `backend/tests/integration/test_scenario10_irrelevant_question.py`
-- [ ] T055 [US3] DML/non-`SELECT` statement guard: reject any statement whose `sqlglot`-parsed root is not a single `SELECT`, including input that parses into more than one statement (reason `MULTIPLE_STATEMENTS_REJECTED`), before any column/table policy check (FR-014, research.md §5) in `backend/src/services/enforcement/enforcer.py` (depends on T047)
-- [ ] T056 [US3] Irrelevant-question handling in the query graph: no schema-relevant mapping → return `"question not mapped to schema"` without generating or executing SQL (FR-014, Scenario 10) in `backend/src/graph/query_graph.py` (depends on T050)
+- [X] T053 [P] [US3] BDD step defs for Scenario 9 (DML-attempt statement rejected unconditionally, including stacked multi-statement input rejected with reason `MULTIPLE_STATEMENTS_REJECTED`, FR-014) in `backend/tests/integration/test_scenario9_dml_rejected.py`
+- [X] T054 [P] [US3] BDD step defs for Scenario 10 (irrelevant question does not leak schema or bypass enforcement) in `backend/tests/integration/test_scenario10_irrelevant_question.py`
+- [X] T055 [US3] DML/non-`SELECT` statement guard: reject any statement whose `sqlglot`-parsed root is not a single `SELECT`, including input that parses into more than one statement (reason `MULTIPLE_STATEMENTS_REJECTED`), before any column/table policy check (FR-014, research.md §5) in `backend/src/services/enforcement/enforcer.py` (depends on T047)
+- [X] T056 [US3] Irrelevant-question handling in the query graph: no schema-relevant mapping → return `"question not mapped to schema"` without generating or executing SQL (FR-014, Scenario 10) in `backend/src/graph/query_graph.py` (depends on T050)
 - [ ] T057 [US3] `GET /audit-log` endpoint with domain/time-range/decision-type filters (contracts/api.md, NFR-004) in `backend/src/api/audit.py` (depends on T008, T009)
 - [ ] T057a [P] [US3] BDD step defs for Scenario 11 (enforcement-path failure fails closed, reason `ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario11_enforcement_error.py`
 - [ ] T052a [US3] Unit test: when a query trips multiple independent policy violations simultaneously, the reported reason follows FR-007's severity ranking (`ENFORCEMENT_ERROR`/`NO_ACTIVE_POLICY`/`COLUMN_BLOCKED` > `ROLE_GATE_MISMATCH` > row-policy injection), not AST scan order in `backend/tests/unit/test_enforcement_severity_ranking.py` (depends on T048)
@@ -375,22 +375,28 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   (fail-closed default). `role_gate` is never auto-derived in Milestone 1;
   it's only ever a manual, post-publish override (see T064 for
   `diagnosis_code`). See spec.md Amendments, 2026-07-30.
-- **Open gaps for T054/T056** (not blocking T049/T050, flagged for
-  whoever picks up Scenario 10): (1) `sql_proposal.py`'s `propose_sql`
-  (T049) matches a question's tokens against known table/column names
-  only — FR-014 also calls for matching against "a policy-configured
-  synonym list," but no synonym field exists anywhere in
-  `PolicyArtifact`/`policy-artifact.schema.yaml` (data-model.md). This is
-  a conservative gap (more questions look unmapped, never fewer — never
-  an over-match/security issue), not a correctness bug, but the schema
-  extension needed to close it hasn't been designed. (2) `query_graph.py`
-  (T050) does not catch `QuestionNotMappedError` — it's left to propagate
-  as a plain exception. `Decision`'s enum (`allow`/`block`/`mask`/
-  `classify_*`/`policy_published`) has no value that correctly represents
-  "no policy was evaluated at all" (spec.md explicitly says this is
-  neither an `allow` nor a `block`), so T056 needs to resolve what
-  `decision` value the required audit-log entry gets before wiring the
-  actual graph branch and HTTP-200 response — likely needs its own
-  `/speckit.clarify` note, similar to the T044/T045 gap resolved above.
+- **Resolved 2026-07-30 (T056)** (was: open gap for T050/T056): `query_graph.py`
+  now catches `QuestionNotMappedError` in `generate_node`, storing a
+  synthetic `EnforcementResult` with the new `Decision.QUESTION_NOT_MAPPED`
+  value (audit_log.py, added alongside `POLICY_PUBLISHED` for the same
+  reason: neither `allow` nor `block` fit). A conditional edge routes
+  straight to `audit`, skipping `enforce`/`execute` entirely — no SQL is
+  ever generated or run, and the audit-completeness rule (FR-010) still
+  gets its one entry (`raw_query_hash=None`, `policy_version_used=None`,
+  since neither SQL nor a policy version is ever resolved for this
+  outcome). `POST /query` (T051) no longer needs its interim
+  `except QuestionNotMappedError` handling; it now branches on
+  `result.decision == Decision.QUESTION_NOT_MAPPED` like any other
+  decision. Verified end-to-end with a mocked-Postgres smoke test
+  confirming the audit write actually happens. See spec.md Amendments,
+  2026-07-30.
+- **Still open**: `sql_proposal.py`'s `propose_sql` (T049) matches a
+  question's tokens against known table/column names only — FR-014 also
+  calls for matching against "a policy-configured synonym list," but no
+  synonym field exists anywhere in `PolicyArtifact`/
+  `policy-artifact.schema.yaml` (data-model.md). This is a conservative
+  gap (more questions look unmapped, never fewer — never an
+  over-match/security issue), not a correctness bug, but the schema
+  extension needed to close it hasn't been designed.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.
 - Avoid: same-file conflicts within a `[P]` batch, and any engine code path that branches on domain name (Constitution Principle IV, checked by T067).

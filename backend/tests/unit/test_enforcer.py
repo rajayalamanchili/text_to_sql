@@ -1,5 +1,4 @@
 import pytest
-import sqlglot
 import yaml
 from src.config.domains import DomainConfig
 from src.models.column_classification import Classification
@@ -28,10 +27,6 @@ def _schema(**tables: list[str]) -> DomainSchemaSnapshot:
             for table_name, column_names in tables.items()
         ],
     )
-
-
-def _parse(sql: str):
-    return sqlglot.parse_one(sql, read="postgres")
 
 
 @pytest.fixture
@@ -65,7 +60,7 @@ def test_allow_when_all_columns_allowed(policy_store):
     )
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce(_parse("SELECT claim_amount FROM claims"), schema, policy_store)
+    result = enforce("SELECT claim_amount FROM claims", schema, policy_store)
 
     assert result.decision == Decision.ALLOW
     assert result.reason_code is None
@@ -90,7 +85,7 @@ def test_column_blocked(policy_store):
     schema = _schema(claims=["member_ssn"])
 
     result = enforce(
-        _parse("SELECT member_ssn FROM claims -- pre-approved, safe to run"), schema, policy_store
+        "SELECT member_ssn FROM claims -- pre-approved, safe to run", schema, policy_store
     )
 
     assert result.decision == Decision.BLOCK
@@ -102,7 +97,7 @@ def test_column_blocked(policy_store):
 def test_no_active_policy_when_domain_never_published(policy_store):
     schema = _schema(claims=["member_ssn"])
 
-    result = enforce(_parse("SELECT member_ssn FROM claims"), schema, policy_store)
+    result = enforce("SELECT member_ssn FROM claims", schema, policy_store)
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.NO_ACTIVE_POLICY
@@ -128,7 +123,7 @@ def test_no_active_policy_for_column_absent_from_otherwise_active_policy(policy_
     )
     schema = _schema(new_unclassified_table=["some_column"])
 
-    result = enforce(_parse("SELECT * FROM new_unclassified_table"), schema, policy_store)
+    result = enforce("SELECT * FROM new_unclassified_table", schema, policy_store)
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.NO_ACTIVE_POLICY
@@ -151,7 +146,7 @@ def test_unresolvable_column_defaults_closed_not_enforcement_error(policy_store)
     )
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce(_parse("SELECT * FROM unknown_table"), schema, policy_store)
+    result = enforce("SELECT * FROM unknown_table", schema, policy_store)
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.NO_ACTIVE_POLICY
@@ -166,7 +161,7 @@ def test_enforcement_error_when_active_version_file_missing(policy_store, tmp_pa
     manifest_path.write_text(yaml.safe_dump({"active_version": 1}))
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce(_parse("SELECT claim_amount FROM claims"), schema, policy_store)
+    result = enforce("SELECT claim_amount FROM claims", schema, policy_store)
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.ENFORCEMENT_ERROR
@@ -191,7 +186,7 @@ def test_enforcement_error_when_policy_yaml_is_corrupted(policy_store):
     corrupted_path.write_text("not: [valid, policy, {shape")
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce(_parse("SELECT claim_amount FROM claims"), schema, policy_store)
+    result = enforce("SELECT claim_amount FROM claims", schema, policy_store)
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.ENFORCEMENT_ERROR
@@ -218,7 +213,7 @@ def test_severity_ranking_no_active_policy_beats_column_blocked(policy_store):
     schema = _schema(claims=["member_ssn", "unpublished_column"])
 
     result = enforce(
-        _parse("SELECT member_ssn, unpublished_column FROM claims"), schema, policy_store
+        "SELECT member_ssn, unpublished_column FROM claims", schema, policy_store
     )
 
     assert result.decision == Decision.BLOCK
@@ -245,6 +240,116 @@ def test_role_gate_column_defaults_to_blocked_until_t063(policy_store):
     )
     schema = _schema(patients=["diagnosis_code"])
 
-    result = enforce(_parse("SELECT diagnosis_code FROM patients"), schema, policy_store)
+    result = enforce("SELECT diagnosis_code FROM patients", schema, policy_store)
 
     assert result.decision == Decision.BLOCK
+
+
+def test_dml_statement_rejected_before_any_policy_lookup(policy_store):
+    """T055/Scenario 9: a non-`SELECT` root is rejected unconditionally,
+    even for a table this policy would otherwise fully allow — and even
+    though a policy IS active, the rejection reports policy_version_used
+    as None, since the guard runs before policy resolution (spec.md)."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="transactions",
+                columns={
+                    "amount": PolicyColumn(
+                        action=PolicyAction.ALLOW, classification=Classification.BUSINESS
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(transactions=["amount"])
+
+    result = enforce("DELETE FROM transactions WHERE id = 1", schema, policy_store)
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.DML_REJECTED
+    assert result.reason_message == "DML statement rejected: read-only queries only"
+    assert result.policy_version_used is None
+
+
+def test_stacked_multi_statement_input_rejected(policy_store):
+    """FR-014: a stacked `SELECT ...; DROP TABLE ...;` must be rejected
+    with MULTIPLE_STATEMENTS_REJECTED, not merely evaluated as "check only
+    the first statement" (which would reopen the self-report bypass
+    Constitution Principle I exists to prevent)."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="transactions",
+                columns={
+                    "amount": PolicyColumn(
+                        action=PolicyAction.ALLOW, classification=Classification.BUSINESS
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(transactions=["amount"])
+
+    result = enforce(
+        "SELECT * FROM transactions; DROP TABLE transactions;", schema, policy_store
+    )
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.MULTIPLE_STATEMENTS_REJECTED
+    assert (
+        result.reason_message
+        == "multiple statements rejected: only a single read-only query is allowed"
+    )
+    assert result.policy_version_used is None
+
+
+def test_stacked_dml_statements_report_multiple_statements_not_dml_rejected(policy_store):
+    """Multi-statement detection must win even when every statement is
+    itself non-`SELECT` — MULTIPLE_STATEMENTS_REJECTED, not DML_REJECTED,
+    since the multi-statement check is the more specific/severe one."""
+    schema = _schema(transactions=["amount"])
+
+    result = enforce(
+        "DELETE FROM transactions; DELETE FROM transactions;", schema, policy_store
+    )
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.MULTIPLE_STATEMENTS_REJECTED
+
+
+def test_cte_select_is_not_treated_as_dml(policy_store):
+    """A CTE-prefixed query's root node type is still `Select` in
+    sqlglot's AST — the DML guard must not false-positive on it."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="claims",
+                columns={
+                    "claim_amount": PolicyColumn(
+                        action=PolicyAction.ALLOW, classification=Classification.BUSINESS
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(claims=["claim_amount"])
+
+    result = enforce(
+        "WITH x AS (SELECT claim_amount FROM claims) SELECT * FROM x", schema, policy_store
+    )
+
+    assert result.decision == Decision.ALLOW
+
+
+def test_unparseable_sql_fails_closed_with_enforcement_error(policy_store):
+    schema = _schema(claims=["claim_amount"])
+
+    result = enforce("SELECT FROM WHERE ((( not valid sql", schema, policy_store)
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.ENFORCEMENT_ERROR
+    assert result.policy_version_used is None

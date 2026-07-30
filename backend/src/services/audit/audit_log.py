@@ -44,6 +44,12 @@ class Decision(StrEnum):
     # (spec.md Amendments, 2026-07-30) — added here rather than left
     # unaudited, per Constitution Principle VIII.
     POLICY_PUBLISHED = "policy_published"
+    # Scenario 10's outcome is neither `allow` (no SQL ran) nor `block`
+    # (no policy was violated — the question simply never mapped to any
+    # known table). data-model.md's original enum had no slot for this
+    # either (spec.md Amendments, 2026-07-30, T056) — added so this
+    # decision can still be audited without exemption (FR-010).
+    QUESTION_NOT_MAPPED = "question_not_mapped"
 
 
 class ReasonCode(StrEnum):

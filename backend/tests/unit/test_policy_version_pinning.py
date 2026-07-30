@@ -13,7 +13,6 @@ its evaluation.
 
 from __future__ import annotations
 
-import sqlglot
 from src.config.domains import DomainConfig
 from src.models.column_classification import Classification
 from src.models.policy_artifact import PolicyAction, PolicyColumn, PolicyTable
@@ -41,10 +40,6 @@ def _schema(**tables: list[str]) -> DomainSchemaSnapshot:
             for table_name, column_names in tables.items()
         ],
     )
-
-
-def _parse(sql: str):
-    return sqlglot.parse_one(sql, read="postgres")
 
 
 class _PublishDuringEnforcementPolicyStore(PolicyStore):
@@ -112,7 +107,7 @@ def test_concurrent_publish_does_not_affect_in_flight_query(tmp_path):
     )
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce(_parse("SELECT claim_amount FROM claims"), schema, racing_store)
+    result = enforce("SELECT claim_amount FROM claims", schema, racing_store)
 
     assert racing_store.republished is True
     # A newer version now exists in the store...

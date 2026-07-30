@@ -1,32 +1,48 @@
-"""Deterministic enforcement node (research.md §5/§9, FR-007/FR-008/FR-009).
+"""Deterministic enforcement node (research.md §5/§9, FR-007/FR-008/FR-009/FR-014).
 
 `enforce()` is the single decision point that replaces the prior
 prototype's LLM-self-report flaw (Constitution Principle I): its only
-inputs are the parsed SQL AST, the domain's enumerated schema, and the
+inputs are the raw SQL text, the domain's enumerated schema, and the
 active policy artifact — never anything an LLM reports about its own
-query.
+query. It owns the *entire* raw-SQL-to-decision pipeline, including its
+own parsing, rather than trusting an already-parsed AST handed to it —
+this matters concretely for FR-014's multi-statement check: `sqlglot`'s
+single-statement parser (`parse_one`) silently wraps stacked statements
+into one `Block` node instead of raising, so detecting "more than one
+statement" requires `sqlglot.parse()` (which returns every statement) run
+directly against the raw text, before any other check.
 
-Scope of this module today: `allow`/`block` decisions and default-closed
-handling for any column/table absent from the active policy or
-unresolvable against the schema (FR-007, FR-009), plus fail-closed
-`ENFORCEMENT_ERROR` handling for a policy-load failure or any other
-unexpected internal error (FR-007, Scenario 11). `role_gate` (FR-008,
-Scenario 7), row-policy predicate injection (Scenario 5), and the
-upstream non-`SELECT`/multi-statement guard (FR-014) are added by later
-tasks (T063, T059/T060, T055 respectively) as separate branches in this
-same file — `statement` here is assumed already validated as a single
-parsed `SELECT` by that upstream guard.
+Scope of this module today (FR-007, FR-008, FR-009, FR-014, Scenario 11):
+1. FR-014's DML/multi-statement guard — structurally prior to everything
+   else, including policy resolution (spec.md: "The non-`SELECT`/DML
+   check... and the question-to-schema mapping check remain structurally
+   prior to all of the above"). Its rejections always report
+   `policy_version_used=None`, since no policy version is resolved yet at
+   this point.
+2. `allow`/`block` decisions and default-closed handling for any
+   column/table absent from the active policy or unresolvable against the
+   schema (FR-007, FR-009).
+3. Fail-closed `ENFORCEMENT_ERROR` handling for unparseable SQL, a
+   policy-load failure, or any other unexpected internal error (Scenario 11).
+
+`role_gate` (FR-008, Scenario 7) and row-policy predicate injection
+(Scenario 5) are added by later tasks (T063, T059/T060) as separate
+branches in this same file.
 
 Every rejection this function can currently produce ranks in FR-007's
 fixed severity order (highest first): `ENFORCEMENT_ERROR` > `NO_ACTIVE_POLICY`
 > `COLUMN_BLOCKED` — chosen deterministically, never by AST scan order,
-when a single query trips more than one violation at once.
+when a single query trips more than one violation at once. The FR-014
+guard (multi-statement / non-`SELECT`) ranks above all of these, per the
+"structurally prior" rule above, by virtue of running and returning
+first, not via `_SEVERITY_RANK`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+import sqlglot
 import structlog
 from sqlglot import exp
 
@@ -106,13 +122,48 @@ def _load_active_policy(
     return artifact, None
 
 
+def _dml_guard(
+    sql: str, dialect: str
+) -> tuple[exp.Expression | None, EnforcementResult | None]:
+    """FR-014: reject unconditionally, before any policy is even loaded —
+    (a) any input that parses into more than one SQL statement
+    (`MULTIPLE_STATEMENTS_REJECTED`, checked before (b) so a stacked
+    `SELECT ...; DROP TABLE ...;` is never evaluated as "just inspect the
+    first statement"), and (b) any single statement whose root is not a
+    `SELECT` (`DML_REJECTED`). Both rejections report
+    `policy_version_used=None`, since this guard runs structurally prior
+    to policy resolution (spec.md)."""
+    try:
+        statements = [statement for statement in sqlglot.parse(sql, read=dialect) if statement]
+    except Exception as exc:  # noqa: BLE001 - unparseable SQL fails closed (Scenario 11)
+        return None, _enforcement_error(exc, policy_version_used=None)
+
+    if len(statements) == 0:
+        return None, _enforcement_error(
+            ValueError("no SQL statement found"), policy_version_used=None
+        )
+    if len(statements) > 1:
+        return None, _blocked(ReasonCode.MULTIPLE_STATEMENTS_REJECTED, policy_version_used=None)
+
+    statement = statements[0]
+    if not isinstance(statement, exp.Select):
+        return None, _blocked(ReasonCode.DML_REJECTED, policy_version_used=None)
+
+    return statement, None
+
+
 def enforce(
-    statement: exp.Expression, schema: DomainSchemaSnapshot, policy_store: PolicyStore
+    sql: str, schema: DomainSchemaSnapshot, policy_store: PolicyStore, *, dialect: str = "postgres"
 ) -> EnforcementResult:
-    """Deterministically decide `allow`/`block` for `statement` (an
-    already-validated single `SELECT`) against the domain's active
-    policy, resolved once at the start of this call and reused for every
+    """Deterministically decide `allow`/`block` for `sql` against the
+    domain's active policy. Parses `sql` itself and applies FR-014's
+    DML/multi-statement guard before doing anything else; the active
+    policy version is then resolved once and reused for every remaining
     check (FR-007 — a concurrent publish cannot affect this evaluation)."""
+    statement, guard_error = _dml_guard(sql, dialect)
+    if guard_error is not None:
+        return guard_error
+
     artifact, error = _load_active_policy(policy_store)
     if error is not None:
         return error

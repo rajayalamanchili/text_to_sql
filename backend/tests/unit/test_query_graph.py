@@ -9,7 +9,6 @@ from src.graph.query_graph import run_query
 from src.models.column_classification import Classification
 from src.models.policy_artifact import PolicyAction, PolicyColumn, PolicyTable
 from src.services.audit.audit_log import ActorRole, AuditLogWriter, Decision, ReasonCode
-from src.services.generation.sql_proposal import QuestionNotMappedError
 from src.services.policy.policy_store import PolicyStore
 
 
@@ -225,7 +224,11 @@ def test_question_is_mapped_to_schema_and_enforced(policy_store):
     assert result.rows == [(42,)]
 
 
-def test_unmapped_question_raises_question_not_mapped(policy_store):
+def test_unmapped_question_returns_question_not_mapped_without_running_sql(policy_store):
+    """T056/Scenario 10: an unmapped question does not raise — it
+    resolves to its own `Decision.QUESTION_NOT_MAPPED` outcome, never
+    reaches `enforce`/`execute` (no SQL generated or run), and still
+    produces exactly one audit log entry (FR-010, no exemption)."""
     fixture = _Fixture(
         tables=["claims"],
         columns_by_table={"claims": [("claim_amount", "numeric")]},
@@ -233,19 +236,28 @@ def test_unmapped_question_raises_question_not_mapped(policy_store):
         distinct_counts={("claims", "claim_amount"): 1},
     )
     conn = _FakeConnection(fixture)
-    audit_writer = AuditLogWriter(_FakeAuditSink())
+    sink = _FakeAuditSink()
+    audit_writer = AuditLogWriter(sink)
 
-    with pytest.raises(QuestionNotMappedError):
-        asyncio.run(
-            run_query(
-                domain="fintech",
-                conn=conn,
-                caller=_analyst(),
-                policy_store=policy_store,
-                audit_writer=audit_writer,
-                question="what is the weather today?",
-            )
+    result = asyncio.run(
+        run_query(
+            domain="fintech",
+            conn=conn,
+            caller=_analyst(),
+            policy_store=policy_store,
+            audit_writer=audit_writer,
+            question="what is the weather today?",
         )
+    )
+
+    assert result.decision == Decision.QUESTION_NOT_MAPPED
+    assert result.reason_code == ReasonCode.QUESTION_NOT_MAPPED
+    assert result.reason_message == "question not mapped to schema"
+    assert result.rows is None
+    assert result.policy_version_used is None
+    assert len(sink.saved) == 1
+    assert sink.saved[0].decision == Decision.QUESTION_NOT_MAPPED
+    assert sink.saved[0].raw_query_hash is None
 
 
 def test_unparseable_sql_fails_closed_with_enforcement_error(policy_store):

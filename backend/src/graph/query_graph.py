@@ -11,16 +11,26 @@ classification uses (FR-001) rather than a lighter query-time-only
 variant — Milestone 1's scope doesn't call for that optimization; revisit
 only if NFR-002/eval benchmarking flags it as a real bottleneck.
 
+`enforce_node` passes `state["sql"]` straight through as raw text — the
+non-`SELECT`/multi-statement DML guard (FR-014, T055) and all SQL parsing
+now live entirely inside `enforce()` (`enforcer.py`), which owns parsing
+so it can distinguish "more than one statement" from "one parseable
+statement" itself, rather than this graph pre-parsing and silently
+collapsing that distinction.
+
+`question`'s "cannot be mapped to schema" case (FR-014, Scenario 10, T056):
+`propose_sql` (T049) raises `QuestionNotMappedError` before generating any
+SQL; `generate_node` catches it and stores a synthetic `EnforcementResult`
+directly in state (`decision=Decision.QUESTION_NOT_MAPPED`,
+`reason_code=ReasonCode.QUESTION_NOT_MAPPED`, `policy_version_used=None`
+— no policy was ever resolved, since this never reaches `enforce_node`).
+A conditional edge then routes straight to `audit`, skipping `enforce`
+and `execute` entirely, so no SQL is ever generated or run — FR-010's
+audit-completeness rule still gets its one entry either way.
+
 Deliberately NOT yet handled here (later tasks, same file):
-- The non-`SELECT`/multi-statement DML guard (FR-014) — T055.
 - `role_gate` and row-policy predicate injection — T063, T059/T060 (both
   inside `enforcer.py`, which this graph already calls through).
-- `question`'s "cannot be mapped to schema" case (FR-014, Scenario 10):
-  `propose_sql` (T049) already detects this and raises
-  `QuestionNotMappedError`, but this graph does not catch it — the exact
-  contract (HTTP 200, its own audit-log `decision` value, since neither
-  `allow`/`block` fits "no policy was evaluated at all") is T056's job to
-  define and test against Scenario 10, not guessed at here.
 """
 
 from __future__ import annotations
@@ -31,8 +41,6 @@ from typing import TypedDict
 from uuid import UUID, uuid4
 
 import psycopg
-import sqlglot
-import structlog
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
@@ -46,10 +54,8 @@ from src.services.audit.audit_log import (
 )
 from src.services.enforcement.enforcer import EnforcementResult, enforce
 from src.services.enumeration.schema_enumerator import enumerate_schema
-from src.services.generation.sql_proposal import propose_sql
+from src.services.generation.sql_proposal import QuestionNotMappedError, propose_sql
 from src.services.policy.policy_store import PolicyStore
-
-_logger = structlog.get_logger("steward.query_graph")
 
 
 @dataclass
@@ -82,33 +88,34 @@ class QueryResult:
     rows: list[tuple] | None
 
 
-def _sql_parse_failure(exc: Exception) -> EnforcementResult:
-    """A raw/generated SQL string that `sqlglot` itself can't parse fails
-    closed exactly like any other unexpected enforcement-path error
-    (Scenario 11) — this happens before `enforce()` is even reachable, so
-    it can't rely on that function's own try/except."""
-    _logger.warning("sql_parse_failure", error=str(exc), error_type=type(exc).__name__)
-    return EnforcementResult(
-        decision=Decision.BLOCK,
-        reason_code=ReasonCode.ENFORCEMENT_ERROR,
-        reason_message=render_reason_message(ReasonCode.ENFORCEMENT_ERROR),
-        policy_version_used=None,
-    )
-
-
 def generate_node(state: QueryGraphState, runtime: Runtime[QueryGraphContext]) -> dict:
     schema = enumerate_schema(runtime.context.domain, runtime.context.conn)
-    proposal = propose_sql(schema, question=state.get("question"), sql=state.get("sql"))
+    try:
+        proposal = propose_sql(schema, question=state.get("question"), sql=state.get("sql"))
+    except QuestionNotMappedError:
+        # FR-014/Scenario 10: no SQL is generated at all — `sql` stays
+        # unset, which `_route_after_generate` uses to skip straight to
+        # `audit`, and `policy_version_used` stays null since no policy
+        # is ever resolved for this outcome.
+        return {
+            "enforcement": EnforcementResult(
+                decision=Decision.QUESTION_NOT_MAPPED,
+                reason_code=ReasonCode.QUESTION_NOT_MAPPED,
+                reason_message=render_reason_message(ReasonCode.QUESTION_NOT_MAPPED),
+                policy_version_used=None,
+            )
+        }
     return {"sql": proposal.sql}
+
+
+def _route_after_generate(state: QueryGraphState, runtime: Runtime[QueryGraphContext]) -> str:
+    del runtime
+    return "enforce" if state.get("sql") is not None else "audit"
 
 
 def enforce_node(state: QueryGraphState, runtime: Runtime[QueryGraphContext]) -> dict:
     schema = enumerate_schema(runtime.context.domain, runtime.context.conn)
-    try:
-        statement = sqlglot.parse_one(state["sql"], read="postgres")
-    except Exception as exc:  # noqa: BLE001 - fail closed on unparseable SQL
-        return {"enforcement": _sql_parse_failure(exc)}
-    result = enforce(statement, schema, runtime.context.policy_store)
+    result = enforce(state["sql"], schema, runtime.context.policy_store)
     return {"enforcement": result}
 
 
@@ -123,6 +130,7 @@ def execute_node(state: QueryGraphState, runtime: Runtime[QueryGraphContext]) ->
 
 async def audit_node(state: QueryGraphState, runtime: Runtime[QueryGraphContext]) -> dict:
     enforcement = state["enforcement"]
+    sql = state.get("sql")
     entry = AuditLogEntry.create(
         domain=runtime.context.domain,
         query_id=state["query_id"],
@@ -131,7 +139,7 @@ async def audit_node(state: QueryGraphState, runtime: Runtime[QueryGraphContext]
         reason_code=enforcement.reason_code,
         reason_message=enforcement.reason_message,
         policy_version_used=enforcement.policy_version_used,
-        raw_query_hash=hashlib.sha256(state["sql"].encode()).hexdigest(),
+        raw_query_hash=hashlib.sha256(sql.encode()).hexdigest() if sql is not None else None,
     )
     await runtime.context.audit_writer.write(entry)
     return {}
@@ -145,7 +153,9 @@ def build_query_graph():
     graph.add_node("audit", audit_node)
 
     graph.add_edge(START, "generate")
-    graph.add_edge("generate", "enforce")
+    graph.add_conditional_edges(
+        "generate", _route_after_generate, {"enforce": "enforce", "audit": "audit"}
+    )
     graph.add_edge("enforce", "execute")
     graph.add_edge("execute", "audit")
     graph.add_edge("audit", END)
@@ -165,10 +175,10 @@ async def run_query(
 ) -> QueryResult:
     """Run the query graph for one request and return its outcome.
 
-    Raises `QuestionNotMappedError` (from `sql_proposal.py`) if `question`
-    cannot be mapped to any known table — see this module's docstring for
-    why that case is deliberately not handled here yet.
-    """
+    A `question` that cannot be mapped to any known table (FR-014,
+    Scenario 10) does not raise — it returns a `QueryResult` with
+    `decision=Decision.QUESTION_NOT_MAPPED`, `rows=None`, and
+    `policy_version_used=None` (see this module's docstring)."""
     context = QueryGraphContext(
         domain=domain,
         conn=conn,
