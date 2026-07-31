@@ -24,10 +24,17 @@ Scope of this module today (FR-007, FR-008, FR-009, FR-014, Scenario 11):
    schema (FR-007, FR-009).
 3. Fail-closed `ENFORCEMENT_ERROR` handling for unparseable SQL, a
    policy-load failure, or any other unexpected internal error (Scenario 11).
+4. Row-policy predicate injection (FR-008, Scenario 5): once a query would
+   otherwise be allowed, every referenced table carrying a
+   `row_policy_template` gets that predicate AND-merged into its `WHERE`
+   clause (`row_predicate_injector.py`, T059) — this never itself causes a
+   rejection, except that a missing/blank `Caller.tenant_id` for a table
+   that needs it surfaces as `ENFORCEMENT_ERROR` (research.md §7), via the
+   same catch-all `except Exception` this function already applies to its
+   post-DML-guard checks.
 
-`role_gate` (FR-008, Scenario 7) and row-policy predicate injection
-(Scenario 5) are added by later tasks (T063, T059/T060) as separate
-branches in this same file.
+`role_gate` (FR-008, Scenario 7) is added by a later task (T063) as a
+separate branch in this same file.
 
 Every rejection this function can currently produce ranks in FR-007's
 fixed severity order (highest first): `ENFORCEMENT_ERROR` > `NO_ACTIVE_POLICY`
@@ -46,18 +53,21 @@ import sqlglot
 import structlog
 from sqlglot import exp
 
+from src.api.deps import Caller
 from src.models.policy_artifact import PolicyAction, PolicyArtifact
 from src.services.audit.audit_log import Decision, ReasonCode, render_reason_message
 from src.services.enforcement.column_resolver import ColumnResolutionError, resolve_columns
+from src.services.enforcement.row_predicate_injector import inject_row_policies
 from src.services.enumeration.schema_enumerator import DomainSchemaSnapshot
 from src.services.policy.policy_store import PolicyStore
 
 _logger = structlog.get_logger("steward.enforcement")
 
 # FR-007's severity ranking for co-occurring violations, lowest number wins.
-# ROLE_GATE_MISMATCH (T063) and row-policy injection (T059/T060) are not
-# yet produced by this module; their rank is reserved here so the ordering
-# stays correct once those branches land.
+# ROLE_GATE_MISMATCH (T063) is not yet produced by this module; its rank is
+# reserved here so the ordering stays correct once that branch lands.
+# Row-policy injection (Scenario 5) produces no distinct reason of its own
+# — its only failure mode already falls under ENFORCEMENT_ERROR above.
 _SEVERITY_RANK: dict[ReasonCode, int] = {
     ReasonCode.ENFORCEMENT_ERROR: 0,
     ReasonCode.NO_ACTIVE_POLICY: 1,
@@ -75,6 +85,10 @@ class EnforcementResult:
     reason_code: ReasonCode | None
     reason_message: str | None
     policy_version_used: int | None
+    enforced_sql: str | None = None
+    """The SQL text to actually execute on `ALLOW` — the caller-submitted
+    SQL with every applicable `row_policy_template` AND-merged in (T059).
+    Always `None` on `BLOCK`/error outcomes, since nothing executes."""
 
 
 def _blocked(
@@ -122,9 +136,7 @@ def _load_active_policy(
     return artifact, None
 
 
-def _dml_guard(
-    sql: str, dialect: str
-) -> tuple[exp.Expression | None, EnforcementResult | None]:
+def _dml_guard(sql: str, dialect: str) -> tuple[exp.Expression | None, EnforcementResult | None]:
     """FR-014: reject unconditionally, before any policy is even loaded —
     (a) any input that parses into more than one SQL statement
     (`MULTIPLE_STATEMENTS_REJECTED`, checked before (b) so a stacked
@@ -153,13 +165,20 @@ def _dml_guard(
 
 
 def enforce(
-    sql: str, schema: DomainSchemaSnapshot, policy_store: PolicyStore, *, dialect: str = "postgres"
+    sql: str,
+    schema: DomainSchemaSnapshot,
+    policy_store: PolicyStore,
+    caller: Caller,
+    *,
+    dialect: str = "postgres",
 ) -> EnforcementResult:
     """Deterministically decide `allow`/`block` for `sql` against the
     domain's active policy. Parses `sql` itself and applies FR-014's
     DML/multi-statement guard before doing anything else; the active
     policy version is then resolved once and reused for every remaining
-    check (FR-007 — a concurrent publish cannot affect this evaluation)."""
+    check (FR-007 — a concurrent publish cannot affect this evaluation).
+    `caller` is required for row-policy predicate injection (Scenario 5) —
+    it's never consulted for column-level allow/block decisions."""
     statement, guard_error = _dml_guard(sql, dialect)
     if guard_error is not None:
         return guard_error
@@ -216,11 +235,20 @@ def enforce(
             _, reason_code, params = violations[0]
             return _blocked(reason_code, policy_version_used=artifact.version, **params)
 
+        # Scenario 5: never itself a distinct violation — a missing/blank
+        # tenant for a table that needs it falls through to this block's
+        # own `except Exception` below, becoming ENFORCEMENT_ERROR like any
+        # other unexpected failure at this stage.
+        enforced_statement = inject_row_policies(
+            statement, artifact.tables, caller, dialect=dialect
+        )
+
         return EnforcementResult(
             decision=Decision.ALLOW,
             reason_code=None,
             reason_message=None,
             policy_version_used=artifact.version,
+            enforced_sql=enforced_statement.sql(dialect=dialect),
         )
     except Exception as exc:  # noqa: BLE001 - fail closed on any unexpected error
         return _enforcement_error(exc, policy_version_used=artifact.version)

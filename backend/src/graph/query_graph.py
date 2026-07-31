@@ -28,9 +28,12 @@ A conditional edge then routes straight to `audit`, skipping `enforce`
 and `execute` entirely, so no SQL is ever generated or run — FR-010's
 audit-completeness rule still gets its one entry either way.
 
-Deliberately NOT yet handled here (later tasks, same file):
-- `role_gate` and row-policy predicate injection — T063, T059/T060 (both
-  inside `enforcer.py`, which this graph already calls through).
+Deliberately NOT yet handled here (later task, same file):
+- `role_gate` — T063 (inside `enforcer.py`, which this graph already
+  calls through). Row-policy predicate injection (Scenario 5) is wired up
+  (T060): `execute_node` runs `state["enforcement"].enforced_sql` — the
+  caller-submitted SQL with every applicable `row_policy_template`
+  AND-merged in by `enforce()` — not `state["sql"]` directly.
 """
 
 from __future__ import annotations
@@ -115,22 +118,27 @@ def _route_after_generate(state: QueryGraphState, runtime: Runtime[QueryGraphCon
 
 def enforce_node(state: QueryGraphState, runtime: Runtime[QueryGraphContext]) -> dict:
     schema = enumerate_schema(runtime.context.domain, runtime.context.conn)
-    result = enforce(state["sql"], schema, runtime.context.policy_store)
+    result = enforce(state["sql"], schema, runtime.context.policy_store, runtime.context.caller)
     return {"enforcement": result}
 
 
 def execute_node(state: QueryGraphState, runtime: Runtime[QueryGraphContext]) -> dict:
-    if state["enforcement"].decision != Decision.ALLOW:
+    enforcement = state["enforcement"]
+    if enforcement.decision != Decision.ALLOW:
         return {"rows": None}
     with runtime.context.conn.cursor() as cur:
-        cur.execute(state["sql"])
+        cur.execute(enforcement.enforced_sql)
         rows = cur.fetchall()
     return {"rows": rows}
 
 
 async def audit_node(state: QueryGraphState, runtime: Runtime[QueryGraphContext]) -> dict:
     enforcement = state["enforcement"]
-    sql = state.get("sql")
+    # data-model.md: "SHA-256 of the *executed*/rejected SQL text" — on
+    # ALLOW that's `enforced_sql` (row-policy predicates included, since
+    # that's what actually ran against the database), not the
+    # caller-submitted text alone (research.md §5, Scenario 5).
+    sql = enforcement.enforced_sql if enforcement.decision == Decision.ALLOW else state.get("sql")
     entry = AuditLogEntry.create(
         domain=runtime.context.domain,
         query_id=state["query_id"],

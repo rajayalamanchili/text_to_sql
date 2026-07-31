@@ -13,10 +13,11 @@ its evaluation.
 
 from __future__ import annotations
 
+from src.api.deps import Caller
 from src.config.domains import DomainConfig
 from src.models.column_classification import Classification
 from src.models.policy_artifact import PolicyAction, PolicyColumn, PolicyTable
-from src.services.audit.audit_log import Decision
+from src.services.audit.audit_log import ActorRole, Decision
 from src.services.enforcement.enforcer import enforce
 from src.services.enumeration.schema_enumerator import (
     ColumnSchema,
@@ -24,6 +25,10 @@ from src.services.enumeration.schema_enumerator import (
     TableSchema,
 )
 from src.services.policy.policy_store import PolicyStore
+
+
+def _caller() -> Caller:
+    return Caller(role=ActorRole.ANALYST)
 
 
 def _schema(**tables: list[str]) -> DomainSchemaSnapshot:
@@ -107,7 +112,7 @@ def test_concurrent_publish_does_not_affect_in_flight_query(tmp_path):
     )
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce("SELECT claim_amount FROM claims", schema, racing_store)
+    result = enforce("SELECT claim_amount FROM claims", schema, racing_store, _caller())
 
     assert racing_store.republished is True
     # A newer version now exists in the store...

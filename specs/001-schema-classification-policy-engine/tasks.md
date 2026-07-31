@@ -213,13 +213,13 @@ predicate and never returns cross-tenant rows (Scenario 5).
 
 ### Tests for User Story 4
 
-- [ ] T058 [P] [US4] BDD step defs for Scenario 5 (row-level policy applied regardless of LLM predicates, including the fail-closed case where `X-Steward-Tenant` is absent/malformed for a tenant-scoped table, expecting `reason_code: ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario5_row_policy.py`
+- [X] T058 [P] [US4] BDD step defs for Scenario 5 (row-level policy applied regardless of LLM predicates, including the fail-closed case where `X-Steward-Tenant` is absent/malformed for a tenant-scoped table, expecting `reason_code: ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario5_row_policy.py`
 
 ### Implementation for User Story 4
 
-- [ ] T059 [US4] Row-predicate injector: AST-level `WHERE`-clause manipulation, not string concatenation; AND-merges the policy predicate with any existing `WHERE` clause the LLM's SQL already contains, never overwriting or stripping it; binds `:current_tenant` from `Caller.tenant_id` (T010), rejecting with `ENFORCEMENT_ERROR` if the table requires it and it's absent/malformed (research.md §5.3, spec.md FR-008, Scenario 5) in `backend/src/services/enforcement/row_predicate_injector.py` (depends on T047, T010)
-- [ ] T060 [US4] Wire row-predicate injection into the enforcement node in `backend/src/services/enforcement/enforcer.py` (depends on T048, T059)
-- [ ] T061 [US4] Add `tenant_id` `row_policy_template` to the fintech policy artifact in `policies/fintech/<version>/policy.yaml` (depends on T044)
+- [X] T059 [US4] Row-predicate injector: AST-level `WHERE`-clause manipulation, not string concatenation; AND-merges the policy predicate with any existing `WHERE` clause the LLM's SQL already contains, never overwriting or stripping it; binds `:current_tenant` from `Caller.tenant_id` (T010), rejecting with `ENFORCEMENT_ERROR` if the table requires it and it's absent/malformed (research.md §5.3, spec.md FR-008, Scenario 5) in `backend/src/services/enforcement/row_predicate_injector.py` (depends on T047, T010)
+- [X] T060 [US4] Wire row-predicate injection into the enforcement node in `backend/src/services/enforcement/enforcer.py` (depends on T048, T059)
+- [X] T061 [US4] Add `tenant_id` `row_policy_template` to the fintech policy artifact in `policies/fintech/<version>/policy.yaml` (depends on T044)
 
 **Checkpoint**: US1–US4 all independently functional.
 
@@ -400,3 +400,20 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   extension needed to close it hasn't been designed.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.
 - Avoid: same-file conflicts within a `[P]` batch, and any engine code path that branches on domain name (Constitution Principle IV, checked by T067).
+- **T061 (2026-07-31)**: `policies/fintech/1/policy.yaml` + `manifest.yaml`
+  are now checked into git — no fintech policy existed yet (only
+  `policies/fintech/.gitkeep`) when this task ran, and no live Postgres
+  was available in-session to classify/approve/publish for real. Built via
+  `PolicyStore.publish()` (the same code path `POST /policy/publish` (T045)
+  uses) from `eval/ground_truth/fintech.csv`'s hand-labeled classifications
+  — the project's own authoritative "correct, fully human-reviewed" target
+  for this schema — rather than hand-writing YAML to match the schema by
+  guesswork. `claims.row_policy_template` is set to
+  `"tenant_id = :current_tenant"` per this task; `role_gate` (T064,
+  healthcare) is unaffected. This also closes a `quickstart.md` gap:
+  Scenarios 4–6's fintech steps already assumed an active fintech policy
+  existed without ever showing a fintech publish call — a fresh
+  `docker compose up` now has one from git, matching that assumption. A
+  real classify/approve/publish run against fintech remains possible and
+  will simply advance to version 2 (`PolicyStore.publish()`'s manifest
+  pointer only ever moves forward), superseding this seed version.

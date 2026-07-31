@@ -9,19 +9,23 @@ order — never by AST scan order:
         > ROLE_GATE_MISMATCH
         > row-policy predicate injection (doesn't itself cause rejection)
 
-`role_gate` (T063) and row-policy injection (T059/T060) aren't wired up
-in `enforcer.py` yet, so this file only exercises the currently-buildable
-tier: `ENFORCEMENT_ERROR` > `NO_ACTIVE_POLICY` > `COLUMN_BLOCKED`. Extend
-it once those later tasks land.
+`role_gate` (T063) isn't wired up in `enforcer.py` yet, so this file only
+exercises the currently-buildable tier:
+`ENFORCEMENT_ERROR` > `NO_ACTIVE_POLICY` > `COLUMN_BLOCKED`. Extend it
+once that later task lands. Row-policy injection (T059/T060) is wired up,
+but it produces no distinct reason code of its own — its only failure
+mode already falls under `ENFORCEMENT_ERROR` above — so it needs no
+separate ranking tier here.
 """
 
 from __future__ import annotations
 
 import pytest
+from src.api.deps import Caller
 from src.config.domains import DomainConfig
 from src.models.column_classification import Classification
 from src.models.policy_artifact import PolicyAction, PolicyColumn, PolicyTable
-from src.services.audit.audit_log import Decision, ReasonCode
+from src.services.audit.audit_log import ActorRole, Decision, ReasonCode
 from src.services.enforcement.enforcer import enforce
 from src.services.enumeration.schema_enumerator import (
     ColumnSchema,
@@ -29,6 +33,10 @@ from src.services.enumeration.schema_enumerator import (
     TableSchema,
 )
 from src.services.policy.policy_store import PolicyStore
+
+
+def _caller() -> Caller:
+    return Caller(role=ActorRole.ANALYST)
 
 
 def _schema(**tables: list[str]) -> DomainSchemaSnapshot:
@@ -80,7 +88,7 @@ def test_column_blocked_alone_is_reported_as_column_blocked(policy_store):
     )
     schema = _schema(claims=["member_ssn"])
 
-    result = enforce("SELECT member_ssn FROM claims", schema, policy_store)
+    result = enforce("SELECT member_ssn FROM claims", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.COLUMN_BLOCKED
@@ -108,14 +116,16 @@ def test_no_active_policy_outranks_column_blocked(policy_store):
 
     # AST scan order lists the blocked column first; the ranking must
     # still surface NO_ACTIVE_POLICY, not COLUMN_BLOCKED.
-    result = enforce("SELECT member_ssn, unpublished_column FROM claims", schema, policy_store)
+    result = enforce(
+        "SELECT member_ssn, unpublished_column FROM claims", schema, policy_store, _caller()
+    )
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.NO_ACTIVE_POLICY
 
     # Reversing the column order in the AST must not change the outcome.
     reversed_result = enforce(
-        "SELECT unpublished_column, member_ssn FROM claims", schema, policy_store
+        "SELECT unpublished_column, member_ssn FROM claims", schema, policy_store, _caller()
     )
 
     assert reversed_result.decision == Decision.BLOCK
@@ -143,7 +153,9 @@ def test_enforcement_error_outranks_no_active_policy_and_column_blocked(policy_s
     corrupted_path.write_text("not: [valid, policy, {shape")
     schema = _schema(claims=["member_ssn", "unpublished_column"])
 
-    result = enforce("SELECT member_ssn, unpublished_column FROM claims", schema, policy_store)
+    result = enforce(
+        "SELECT member_ssn, unpublished_column FROM claims", schema, policy_store, _caller()
+    )
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.ENFORCEMENT_ERROR

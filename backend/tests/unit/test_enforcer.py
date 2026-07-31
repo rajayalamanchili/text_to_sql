@@ -1,9 +1,10 @@
 import pytest
 import yaml
+from src.api.deps import Caller
 from src.config.domains import DomainConfig
 from src.models.column_classification import Classification
 from src.models.policy_artifact import PolicyAction, PolicyColumn, PolicyTable
-from src.services.audit.audit_log import Decision, ReasonCode
+from src.services.audit.audit_log import ActorRole, Decision, ReasonCode
 from src.services.enforcement.enforcer import enforce
 from src.services.enumeration.schema_enumerator import (
     ColumnSchema,
@@ -11,6 +12,10 @@ from src.services.enumeration.schema_enumerator import (
     TableSchema,
 )
 from src.services.policy.policy_store import PolicyStore
+
+
+def _caller(tenant_id: str | None = None) -> Caller:
+    return Caller(role=ActorRole.ANALYST, tenant_id=tenant_id)
 
 
 def _schema(**tables: list[str]) -> DomainSchemaSnapshot:
@@ -60,7 +65,7 @@ def test_allow_when_all_columns_allowed(policy_store):
     )
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce("SELECT claim_amount FROM claims", schema, policy_store)
+    result = enforce("SELECT claim_amount FROM claims", schema, policy_store, _caller())
 
     assert result.decision == Decision.ALLOW
     assert result.reason_code is None
@@ -85,7 +90,10 @@ def test_column_blocked(policy_store):
     schema = _schema(claims=["member_ssn"])
 
     result = enforce(
-        "SELECT member_ssn FROM claims -- pre-approved, safe to run", schema, policy_store
+        "SELECT member_ssn FROM claims -- pre-approved, safe to run",
+        schema,
+        policy_store,
+        _caller(),
     )
 
     assert result.decision == Decision.BLOCK
@@ -97,7 +105,7 @@ def test_column_blocked(policy_store):
 def test_no_active_policy_when_domain_never_published(policy_store):
     schema = _schema(claims=["member_ssn"])
 
-    result = enforce("SELECT member_ssn FROM claims", schema, policy_store)
+    result = enforce("SELECT member_ssn FROM claims", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.NO_ACTIVE_POLICY
@@ -123,7 +131,7 @@ def test_no_active_policy_for_column_absent_from_otherwise_active_policy(policy_
     )
     schema = _schema(new_unclassified_table=["some_column"])
 
-    result = enforce("SELECT * FROM new_unclassified_table", schema, policy_store)
+    result = enforce("SELECT * FROM new_unclassified_table", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.NO_ACTIVE_POLICY
@@ -146,7 +154,7 @@ def test_unresolvable_column_defaults_closed_not_enforcement_error(policy_store)
     )
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce("SELECT * FROM unknown_table", schema, policy_store)
+    result = enforce("SELECT * FROM unknown_table", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.NO_ACTIVE_POLICY
@@ -161,7 +169,7 @@ def test_enforcement_error_when_active_version_file_missing(policy_store, tmp_pa
     manifest_path.write_text(yaml.safe_dump({"active_version": 1}))
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce("SELECT claim_amount FROM claims", schema, policy_store)
+    result = enforce("SELECT claim_amount FROM claims", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.ENFORCEMENT_ERROR
@@ -186,7 +194,7 @@ def test_enforcement_error_when_policy_yaml_is_corrupted(policy_store):
     corrupted_path.write_text("not: [valid, policy, {shape")
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce("SELECT claim_amount FROM claims", schema, policy_store)
+    result = enforce("SELECT claim_amount FROM claims", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.ENFORCEMENT_ERROR
@@ -213,7 +221,7 @@ def test_severity_ranking_no_active_policy_beats_column_blocked(policy_store):
     schema = _schema(claims=["member_ssn", "unpublished_column"])
 
     result = enforce(
-        "SELECT member_ssn, unpublished_column FROM claims", schema, policy_store
+        "SELECT member_ssn, unpublished_column FROM claims", schema, policy_store, _caller()
     )
 
     assert result.decision == Decision.BLOCK
@@ -240,7 +248,7 @@ def test_role_gate_column_defaults_to_blocked_until_t063(policy_store):
     )
     schema = _schema(patients=["diagnosis_code"])
 
-    result = enforce("SELECT diagnosis_code FROM patients", schema, policy_store)
+    result = enforce("SELECT diagnosis_code FROM patients", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
 
@@ -265,7 +273,7 @@ def test_dml_statement_rejected_before_any_policy_lookup(policy_store):
     )
     schema = _schema(transactions=["amount"])
 
-    result = enforce("DELETE FROM transactions WHERE id = 1", schema, policy_store)
+    result = enforce("DELETE FROM transactions WHERE id = 1", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.DML_REJECTED
@@ -294,7 +302,7 @@ def test_stacked_multi_statement_input_rejected(policy_store):
     schema = _schema(transactions=["amount"])
 
     result = enforce(
-        "SELECT * FROM transactions; DROP TABLE transactions;", schema, policy_store
+        "SELECT * FROM transactions; DROP TABLE transactions;", schema, policy_store, _caller()
     )
 
     assert result.decision == Decision.BLOCK
@@ -313,7 +321,7 @@ def test_stacked_dml_statements_report_multiple_statements_not_dml_rejected(poli
     schema = _schema(transactions=["amount"])
 
     result = enforce(
-        "DELETE FROM transactions; DELETE FROM transactions;", schema, policy_store
+        "DELETE FROM transactions; DELETE FROM transactions;", schema, policy_store, _caller()
     )
 
     assert result.decision == Decision.BLOCK
@@ -339,7 +347,10 @@ def test_cte_select_is_not_treated_as_dml(policy_store):
     schema = _schema(claims=["claim_amount"])
 
     result = enforce(
-        "WITH x AS (SELECT claim_amount FROM claims) SELECT * FROM x", schema, policy_store
+        "WITH x AS (SELECT claim_amount FROM claims) SELECT * FROM x",
+        schema,
+        policy_store,
+        _caller(),
     )
 
     assert result.decision == Decision.ALLOW
@@ -348,8 +359,112 @@ def test_cte_select_is_not_treated_as_dml(policy_store):
 def test_unparseable_sql_fails_closed_with_enforcement_error(policy_store):
     schema = _schema(claims=["claim_amount"])
 
-    result = enforce("SELECT FROM WHERE ((( not valid sql", schema, policy_store)
+    result = enforce("SELECT FROM WHERE ((( not valid sql", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.ENFORCEMENT_ERROR
     assert result.policy_version_used is None
+
+
+def test_allow_without_row_policy_has_enforced_sql_populated(policy_store):
+    """T060: `enforced_sql` must be populated on every ALLOW, even when no
+    table in the query carries a `row_policy_template` — it's what
+    `execute_node` (query_graph.py) runs, not `None`."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="claims",
+                columns={
+                    "claim_amount": PolicyColumn(
+                        action=PolicyAction.ALLOW, classification=Classification.BUSINESS
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(claims=["claim_amount"])
+
+    result = enforce("SELECT claim_amount FROM claims", schema, policy_store, _caller())
+
+    assert result.decision == Decision.ALLOW
+    assert result.enforced_sql == "SELECT claim_amount FROM claims"
+
+
+def test_block_has_no_enforced_sql(policy_store):
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="claims",
+                columns={
+                    "member_ssn": PolicyColumn(
+                        action=PolicyAction.BLOCK, classification=Classification.PII_DIRECT
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(claims=["member_ssn"])
+
+    result = enforce("SELECT member_ssn FROM claims", schema, policy_store, _caller())
+
+    assert result.decision == Decision.BLOCK
+    assert result.enforced_sql is None
+
+
+def test_row_policy_predicate_is_injected_into_enforced_sql(policy_store):
+    """T060: `enforce()` actually wires `row_predicate_injector.py` (T059)
+    in on the ALLOW path — this is the integration point Scenario 5's BDD
+    test (T058) depends on, distinct from the injector's own unit tests
+    (test_row_predicate_injector.py), which never go through `enforce()`."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="claims",
+                row_policy_template="tenant_id = :current_tenant",
+                columns={
+                    "claim_id": PolicyColumn(
+                        action=PolicyAction.ALLOW, classification=Classification.BUSINESS
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(claims=["claim_id", "tenant_id"])
+
+    result = enforce("SELECT claim_id FROM claims", schema, policy_store, _caller("tenant-001"))
+
+    assert result.decision == Decision.ALLOW
+    assert (
+        result.enforced_sql == "SELECT claim_id FROM claims WHERE claims.tenant_id = 'tenant-001'"
+    )
+
+
+def test_missing_tenant_for_row_policy_table_fails_closed_with_enforcement_error(policy_store):
+    """Scenario 5's fail-closed case, exercised through `enforce()` itself
+    rather than the injector directly: a table whose `row_policy_template`
+    needs `:current_tenant` but the caller has no tenant must reject the
+    whole query with ENFORCEMENT_ERROR, not silently allow it unscoped."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="claims",
+                row_policy_template="tenant_id = :current_tenant",
+                columns={
+                    "claim_id": PolicyColumn(
+                        action=PolicyAction.ALLOW, classification=Classification.BUSINESS
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(claims=["claim_id", "tenant_id"])
+
+    result = enforce("SELECT claim_id FROM claims", schema, policy_store, _caller(None))
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.ENFORCEMENT_ERROR
+    assert result.enforced_sql is None
