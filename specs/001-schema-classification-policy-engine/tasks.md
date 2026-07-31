@@ -236,12 +236,12 @@ excluded, per FR-008 configuration) for a caller without the required role
 
 ### Tests for User Story 5
 
-- [ ] T062 [P] [US5] BDD step defs for Scenario 7 (role-gated column visible only to correct role) in `backend/tests/integration/test_scenario7_role_gate.py`
+- [X] T062 [P] [US5] BDD step defs for Scenario 7 (role-gated column visible only to correct role) in `backend/tests/integration/test_scenario7_role_gate.py`
 
 ### Implementation for User Story 5
 
-- [ ] T063 [US5] `role_gate` enforcement branch in the enforcement node, checked against the caller's role from the auth stub, honoring the column's `on_role_mismatch` setting (`reject` by default, `exclude` if explicitly configured; FR-008) in `backend/src/services/enforcement/enforcer.py` (depends on T048)
-- [ ] T064 [US5] Finalize the `diagnosis_code` gated-role config (`roles: [admin]`, per spec.md Scenario 7 as corrected on 2026-07-23) in `policies/healthcare/<version>/policy.yaml` (depends on T044)
+- [X] T063 [US5] `role_gate` enforcement branch in the enforcement node, checked against the caller's role from the auth stub, honoring the column's `on_role_mismatch` setting (`reject` by default, `exclude` if explicitly configured; FR-008) in `backend/src/services/enforcement/enforcer.py` (depends on T048)
+- [X] T064 [US5] Finalize the `diagnosis_code` gated-role config (`roles: [admin]`, per spec.md Scenario 7 as corrected on 2026-07-23) in `policies/healthcare/<version>/policy.yaml` (depends on T044)
 
 **Checkpoint**: All 5 user stories independently functional — all 11 `spec.md` scenarios have a corresponding passing test.
 
@@ -417,3 +417,29 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   real classify/approve/publish run against fintech remains possible and
   will simply advance to version 2 (`PolicyStore.publish()`'s manifest
   pointer only ever moves forward), superseding this seed version.
+- **T063 (2026-07-31)**: `on_role_mismatch: exclude` support (new
+  `backend/src/services/enforcement/role_gate.py`) only recognizes the
+  gated column as excludable when it's a bare, unaliased-table reference
+  directly in the query's own top-level `SELECT` list — never inside an
+  aggregate/function (spec.md already required this), never via
+  `SELECT *` (this function doesn't track wildcard-expansion positions),
+  and never when it's referenced only in a `WHERE`/`JOIN` clause without
+  being selected at all. All three fall back to `reject`. One additional
+  rule spec.md doesn't explicitly state: if excluding every `exclude`-
+  eligible column in a query would leave zero projections (e.g. `SELECT
+  diagnosis_code FROM patients` with only that one gated column), those
+  columns fall back to `reject` too rather than the enforcer emitting
+  unexecutable `SELECT FROM patients` — a narrow, conservative
+  interpretation of FR-008's "allowing the rest of the query to proceed"
+  wording (there has to be a "rest").
+- **T064 (2026-07-31)**: same situation and same fix as T061 — no
+  healthcare policy existed yet (only `policies/healthcare/.gitkeep`), no
+  live Postgres was available in-session, so `policies/healthcare/1/
+  policy.yaml` + `manifest.yaml` were built via `PolicyStore.publish()`
+  from `eval/ground_truth/healthcare.csv`'s hand-labeled classifications
+  and checked into git. `patients.diagnosis_code` was then hand-edited
+  from its ground-truth-derived `block` to `action: role_gate, roles:
+  [admin]` (default `on_role_mismatch: reject`), per Scenario 7 as
+  corrected 2026-07-23. A real classify/approve/publish run against
+  healthcare remains possible and will advance to version 2, superseding
+  this seed version — same caveat as T061.

@@ -3,7 +3,7 @@ import yaml
 from src.api.deps import Caller
 from src.config.domains import DomainConfig
 from src.models.column_classification import Classification
-from src.models.policy_artifact import PolicyAction, PolicyColumn, PolicyTable
+from src.models.policy_artifact import PolicyAction, PolicyColumn, PolicyTable, RoleMismatchAction
 from src.services.audit.audit_log import ActorRole, Decision, ReasonCode
 from src.services.enforcement.enforcer import enforce
 from src.services.enumeration.schema_enumerator import (
@@ -14,8 +14,8 @@ from src.services.enumeration.schema_enumerator import (
 from src.services.policy.policy_store import PolicyStore
 
 
-def _caller(tenant_id: str | None = None) -> Caller:
-    return Caller(role=ActorRole.ANALYST, tenant_id=tenant_id)
+def _caller(tenant_id: str | None = None, role: ActorRole = ActorRole.ANALYST) -> Caller:
+    return Caller(role=role, tenant_id=tenant_id)
 
 
 def _schema(**tables: list[str]) -> DomainSchemaSnapshot:
@@ -228,9 +228,10 @@ def test_severity_ranking_no_active_policy_beats_column_blocked(policy_store):
     assert result.reason_code == ReasonCode.NO_ACTIVE_POLICY
 
 
-def test_role_gate_column_defaults_to_blocked_until_t063(policy_store):
-    """T063 hasn't wired up real role-based evaluation yet; until then a
-    role_gate column must fail closed rather than silently allow."""
+def test_role_gate_column_rejects_caller_without_the_required_role(policy_store):
+    """T063/Scenario 7: `on_role_mismatch` defaults to `reject` — a
+    caller whose role isn't in `roles` gets the whole query rejected
+    with `ROLE_GATE_MISMATCH`, not a generic fail-closed placeholder."""
     policy_store.publish(
         [
             PolicyTable(
@@ -251,6 +252,208 @@ def test_role_gate_column_defaults_to_blocked_until_t063(policy_store):
     result = enforce("SELECT diagnosis_code FROM patients", schema, policy_store, _caller())
 
     assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.ROLE_GATE_MISMATCH
+    assert result.reason_message == "column requires role: admin"
+
+
+def test_role_gate_column_allows_caller_with_the_required_role(policy_store):
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="patients",
+                columns={
+                    "diagnosis_code": PolicyColumn(
+                        action=PolicyAction.ROLE_GATE,
+                        roles=["admin"],
+                        classification=Classification.SENSITIVE_CATEGORY,
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(patients=["diagnosis_code"])
+
+    result = enforce(
+        "SELECT diagnosis_code FROM patients", schema, policy_store, _caller(role=ActorRole.ADMIN)
+    )
+
+    assert result.decision == Decision.ALLOW
+    assert result.enforced_sql == "SELECT diagnosis_code FROM patients"
+
+
+def test_role_gate_exclude_drops_column_and_allows_the_rest(policy_store):
+    """FR-008: `on_role_mismatch: exclude` silently omits the gated
+    column from a flat SELECT list instead of rejecting the whole
+    query."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="patients",
+                columns={
+                    "diagnosis_code": PolicyColumn(
+                        action=PolicyAction.ROLE_GATE,
+                        roles=["admin"],
+                        on_role_mismatch=RoleMismatchAction.EXCLUDE,
+                        classification=Classification.SENSITIVE_CATEGORY,
+                    ),
+                    "patient_id": PolicyColumn(
+                        action=PolicyAction.ALLOW, classification=Classification.BUSINESS
+                    ),
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(patients=["patient_id", "diagnosis_code"])
+
+    result = enforce(
+        "SELECT patient_id, diagnosis_code FROM patients", schema, policy_store, _caller()
+    )
+
+    assert result.decision == Decision.ALLOW
+    assert result.enforced_sql == "SELECT patient_id FROM patients"
+
+
+def test_role_gate_exclude_falls_back_to_reject_inside_aggregate(policy_store):
+    """FR-008: `exclude` is unsupported when the gated column only
+    appears inside an aggregate/computed expression — rewriting
+    `COUNT(diagnosis_code)` would silently change the query's meaning,
+    so this must reject instead."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="patients",
+                columns={
+                    "diagnosis_code": PolicyColumn(
+                        action=PolicyAction.ROLE_GATE,
+                        roles=["admin"],
+                        on_role_mismatch=RoleMismatchAction.EXCLUDE,
+                        classification=Classification.SENSITIVE_CATEGORY,
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(patients=["diagnosis_code"])
+
+    result = enforce("SELECT COUNT(diagnosis_code) FROM patients", schema, policy_store, _caller())
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.ROLE_GATE_MISMATCH
+
+
+def test_role_gate_exclude_falls_back_to_reject_when_only_in_where_clause(policy_store):
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="patients",
+                columns={
+                    "diagnosis_code": PolicyColumn(
+                        action=PolicyAction.ROLE_GATE,
+                        roles=["admin"],
+                        on_role_mismatch=RoleMismatchAction.EXCLUDE,
+                        classification=Classification.SENSITIVE_CATEGORY,
+                    ),
+                    "patient_id": PolicyColumn(
+                        action=PolicyAction.ALLOW, classification=Classification.BUSINESS
+                    ),
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(patients=["patient_id", "diagnosis_code"])
+
+    result = enforce(
+        "SELECT patient_id FROM patients WHERE diagnosis_code = 'X'",
+        schema,
+        policy_store,
+        _caller(),
+    )
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.ROLE_GATE_MISMATCH
+
+
+def test_role_gate_exclude_falls_back_to_reject_on_select_star(policy_store):
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="patients",
+                columns={
+                    "diagnosis_code": PolicyColumn(
+                        action=PolicyAction.ROLE_GATE,
+                        roles=["admin"],
+                        on_role_mismatch=RoleMismatchAction.EXCLUDE,
+                        classification=Classification.SENSITIVE_CATEGORY,
+                    ),
+                    "patient_id": PolicyColumn(
+                        action=PolicyAction.ALLOW, classification=Classification.BUSINESS
+                    ),
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(patients=["patient_id", "diagnosis_code"])
+
+    result = enforce("SELECT * FROM patients", schema, policy_store, _caller())
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.ROLE_GATE_MISMATCH
+
+
+def test_role_gate_exclude_falls_back_to_reject_when_it_would_empty_select_list(policy_store):
+    """Excluding the only projection would leave `SELECT FROM patients`
+    — not valid SQL, and not "the rest of the query proceeding" per
+    FR-008 — so this must reject instead of producing unexecutable SQL."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="patients",
+                columns={
+                    "diagnosis_code": PolicyColumn(
+                        action=PolicyAction.ROLE_GATE,
+                        roles=["admin"],
+                        on_role_mismatch=RoleMismatchAction.EXCLUDE,
+                        classification=Classification.SENSITIVE_CATEGORY,
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(patients=["diagnosis_code"])
+
+    result = enforce("SELECT diagnosis_code FROM patients", schema, policy_store, _caller())
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.ROLE_GATE_MISMATCH
+
+
+def test_role_gate_multiple_roles_allows_caller_matching_any(policy_store):
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="patients",
+                columns={
+                    "diagnosis_code": PolicyColumn(
+                        action=PolicyAction.ROLE_GATE,
+                        roles=["admin", "analyst"],
+                        classification=Classification.SENSITIVE_CATEGORY,
+                    )
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(patients=["diagnosis_code"])
+
+    result = enforce("SELECT diagnosis_code FROM patients", schema, policy_store, _caller())
+
+    assert result.decision == Decision.ALLOW
 
 
 def test_dml_statement_rejected_before_any_policy_lookup(policy_store):

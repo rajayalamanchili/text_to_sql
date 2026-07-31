@@ -9,10 +9,9 @@ order — never by AST scan order:
         > ROLE_GATE_MISMATCH
         > row-policy predicate injection (doesn't itself cause rejection)
 
-`role_gate` (T063) isn't wired up in `enforcer.py` yet, so this file only
-exercises the currently-buildable tier:
-`ENFORCEMENT_ERROR` > `NO_ACTIVE_POLICY` > `COLUMN_BLOCKED`. Extend it
-once that later task lands. Row-policy injection (T059/T060) is wired up,
+`role_gate` (T063) is wired up in `enforcer.py`, adding the fourth tier:
+`ENFORCEMENT_ERROR` > `NO_ACTIVE_POLICY` > `COLUMN_BLOCKED` >
+`ROLE_GATE_MISMATCH`. Row-policy injection (T059/T060) is wired up too,
 but it produces no distinct reason code of its own — its only failure
 mode already falls under `ENFORCEMENT_ERROR` above — so it needs no
 separate ranking tier here.
@@ -159,3 +158,34 @@ def test_enforcement_error_outranks_no_active_policy_and_column_blocked(policy_s
 
     assert result.decision == Decision.BLOCK
     assert result.reason_code == ReasonCode.ENFORCEMENT_ERROR
+
+
+def test_column_blocked_outranks_role_gate_mismatch(policy_store):
+    """T063: a query touching both a `role_gate` column the caller
+    doesn't qualify for and an explicitly `block`ed column must report
+    `COLUMN_BLOCKED` — the higher-severity reason — not whichever the
+    AST scan happens to reach first."""
+    policy_store.publish(
+        [
+            PolicyTable(
+                table_name="claims",
+                columns={
+                    "member_ssn": PolicyColumn(
+                        action=PolicyAction.BLOCK, classification=Classification.PII_DIRECT
+                    ),
+                    "claim_amount": PolicyColumn(
+                        action=PolicyAction.ROLE_GATE,
+                        roles=["admin"],
+                        classification=Classification.SENSITIVE_CATEGORY,
+                    ),
+                },
+            )
+        ],
+        approved_by="admin",
+    )
+    schema = _schema(claims=["member_ssn", "claim_amount"])
+
+    result = enforce("SELECT claim_amount, member_ssn FROM claims", schema, policy_store, _caller())
+
+    assert result.decision == Decision.BLOCK
+    assert result.reason_code == ReasonCode.COLUMN_BLOCKED

@@ -24,7 +24,16 @@ Scope of this module today (FR-007, FR-008, FR-009, FR-014, Scenario 11):
    schema (FR-007, FR-009).
 3. Fail-closed `ENFORCEMENT_ERROR` handling for unparseable SQL, a
    policy-load failure, or any other unexpected internal error (Scenario 11).
-4. Row-policy predicate injection (FR-008, Scenario 5): once a query would
+4. `role_gate` decisions (FR-008, Scenario 7): a caller whose role isn't
+   in the column's `roles` list either rejects the whole query
+   (`ROLE_GATE_MISMATCH`, the `on_role_mismatch: reject` default) or, if
+   `on_role_mismatch: exclude` is configured *and* the column is
+   referenced in a shape `role_gate.py` (T063) recognizes as excludable,
+   silently drops that column from the query instead. Every unsupported
+   `exclude` shape (aggregate/function, `SELECT *`, WHERE-only reference,
+   or excluding it would leave no projections at all) falls back to
+   `reject`, per FR-008.
+5. Row-policy predicate injection (FR-008, Scenario 5): once a query would
    otherwise be allowed, every referenced table carrying a
    `row_policy_template` gets that predicate AND-merged into its `WHERE`
    clause (`row_predicate_injector.py`, T059) — this never itself causes a
@@ -33,16 +42,13 @@ Scope of this module today (FR-007, FR-008, FR-009, FR-014, Scenario 11):
    same catch-all `except Exception` this function already applies to its
    post-DML-guard checks.
 
-`role_gate` (FR-008, Scenario 7) is added by a later task (T063) as a
-separate branch in this same file.
-
 Every rejection this function can currently produce ranks in FR-007's
 fixed severity order (highest first): `ENFORCEMENT_ERROR` > `NO_ACTIVE_POLICY`
-> `COLUMN_BLOCKED` — chosen deterministically, never by AST scan order,
-when a single query trips more than one violation at once. The FR-014
-guard (multi-statement / non-`SELECT`) ranks above all of these, per the
-"structurally prior" rule above, by virtue of running and returning
-first, not via `_SEVERITY_RANK`.
+> `COLUMN_BLOCKED` > `ROLE_GATE_MISMATCH` — chosen deterministically, never
+by AST scan order, when a single query trips more than one violation at
+once. The FR-014 guard (multi-statement / non-`SELECT`) ranks above all of
+these, per the "structurally prior" rule above, by virtue of running and
+returning first, not via `_SEVERITY_RANK`.
 """
 
 from __future__ import annotations
@@ -54,9 +60,10 @@ import structlog
 from sqlglot import exp
 
 from src.api.deps import Caller
-from src.models.policy_artifact import PolicyAction, PolicyArtifact
+from src.models.policy_artifact import PolicyAction, PolicyArtifact, RoleMismatchAction
 from src.services.audit.audit_log import Decision, ReasonCode, render_reason_message
 from src.services.enforcement.column_resolver import ColumnResolutionError, resolve_columns
+from src.services.enforcement.role_gate import find_excludable_projection
 from src.services.enforcement.row_predicate_injector import inject_row_policies
 from src.services.enumeration.schema_enumerator import DomainSchemaSnapshot
 from src.services.policy.policy_store import PolicyStore
@@ -64,8 +71,6 @@ from src.services.policy.policy_store import PolicyStore
 _logger = structlog.get_logger("steward.enforcement")
 
 # FR-007's severity ranking for co-occurring violations, lowest number wins.
-# ROLE_GATE_MISMATCH (T063) is not yet produced by this module; its rank is
-# reserved here so the ordering stays correct once that branch lands.
 # Row-policy injection (Scenario 5) produces no distinct reason of its own
 # — its only failure mode already falls under ENFORCEMENT_ERROR above.
 _SEVERITY_RANK: dict[ReasonCode, int] = {
@@ -209,6 +214,10 @@ def enforce(
         no_active_policy = (no_active_policy_rank, ReasonCode.NO_ACTIVE_POLICY, {})
 
         violations: list[tuple[int, ReasonCode, dict[str, object]]] = []
+        # (node to remove, its would-be ROLE_GATE_MISMATCH violation) —
+        # only actually removed once we know the whole set won't empty
+        # out the SELECT list (see below).
+        excludable: list[tuple[exp.Expression, tuple[int, ReasonCode, dict[str, object]]]] = []
         for resolved in resolved_columns:
             policy_column = policy_columns.get((resolved.table, resolved.column))
             if policy_column is None:
@@ -224,16 +233,45 @@ def enforce(
                     )
                 )
             else:
-                # PolicyAction.ROLE_GATE: real role-based evaluation is
-                # T063's job, not yet wired up here. Defaulting to a
-                # violation (rather than silently allowing) keeps this
-                # fail-closed in the meantime (Constitution Principle II).
-                violations.append(no_active_policy)
+                # PolicyAction.ROLE_GATE (FR-008, Scenario 7).
+                if caller.role in policy_column.roles:
+                    continue
+                role_gate_violation = (
+                    _SEVERITY_RANK[ReasonCode.ROLE_GATE_MISMATCH],
+                    ReasonCode.ROLE_GATE_MISMATCH,
+                    {"role": ", ".join(role.value for role in policy_column.roles)},
+                )
+                projection = (
+                    find_excludable_projection(
+                        statement, resolved.table, resolved.column, schema, dialect=dialect
+                    )
+                    if policy_column.on_role_mismatch == RoleMismatchAction.EXCLUDE
+                    else None
+                )
+                if projection is None:
+                    # Either `reject` is configured, or `exclude` is but
+                    # this reference isn't a shape it supports (aggregate,
+                    # `SELECT *`, WHERE-only, ...) — fail closed to
+                    # `reject` either way (FR-008).
+                    violations.append(role_gate_violation)
+                else:
+                    excludable.append((projection, role_gate_violation))
+
+        # Excluding every candidate must still leave at least one
+        # projection behind — an empty SELECT list isn't "the rest of the
+        # query proceeding" (FR-008), so fail those columns closed to
+        # `reject` instead rather than produce unexecutable SQL.
+        if excludable and len(excludable) >= len(statement.expressions):
+            violations.extend(violation for _, violation in excludable)
+            excludable = []
 
         if violations:
             violations.sort(key=lambda violation: violation[0])
             _, reason_code, params = violations[0]
             return _blocked(reason_code, policy_version_used=artifact.version, **params)
+
+        for projection, _ in excludable:
+            projection.pop()
 
         # Scenario 5: never itself a distinct violation — a missing/blank
         # tenant for a table that needs it falls through to this block's
