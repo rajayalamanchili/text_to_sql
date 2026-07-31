@@ -7,11 +7,60 @@ on:
 
 jobs:
   backend:
-    name: Backend (lint, format)
+    name: Backend (lint, format, tests, classifier eval)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+    # Two live Postgres instances (mirroring docker-compose.yml's
+    # healthcare-db/fintech-db, healthcare on the standard 5432 host port,
+    # fintech on 5433) — GitHub Actions blocks job steps from starting
+    # until both health checks pass, so no manual wait-for-postgres step
+    # is needed. Credentials come from repo secrets, not hardcoded here
+    # (Settings > Secrets and variables > Actions:
+    # CI_DB_USER/CI_DB_PASSWORD/CI_HEALTHCARE_DB_NAME/CI_FINTECH_DB_NAME) —
+    # these never hold real data (Constitution Principle VII) and never
+    # leave the ephemeral runner, but the credential itself still isn't
+    # committed in plaintext.
+    services:
+      healthcare-db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ${{ secrets.CI_DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.CI_HEALTHCARE_DB_NAME }}
+        ports:
+          - 5432:5432
+        # Deliberately no `-U`/`-d` flags: those would need shell expansion
+        # of $POSTGRES_USER/$POSTGRES_DB, and `options` is passed straight
+        # through to `docker create` by the runner, not shell-evaluated —
+        # bare `pg_isready` (checking the server accepts connections at
+        # all) avoids that ambiguity and is the standard pattern.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      fintech-db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ${{ secrets.CI_DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.CI_FINTECH_DB_NAME }}
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Same {DOMAIN}_DATABASE_URL convention `src/config/domains.py` and
+      # `tests/integration/conftest.py` already read — no test-only
+      # branching needed to make CI and local dev agree on how a domain's
+      # database is discovered.
+      HEALTHCARE_DATABASE_URL: postgresql://${{ secrets.CI_DB_USER }}:${{ secrets.CI_DB_PASSWORD }}@localhost:5432/${{ secrets.CI_HEALTHCARE_DB_NAME }}
+      FINTECH_DATABASE_URL: postgresql://${{ secrets.CI_DB_USER }}:${{ secrets.CI_DB_PASSWORD }}@localhost:5433/${{ secrets.CI_FINTECH_DB_NAME }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,11 +80,25 @@ jobs:
       - name: Format check (ruff format)
         run: uv run ruff format --check .
 
-      # NOTE: the pytest-bdd scenario suite and classifier_eval.py precision/
-      # recall gate are wired in here by T066, once the corresponding test
-      # tasks (T015-T017, T031, T041-T042, T053-T054, T057a, T052a, T044a,
-      # T058, T062) and eval script (T030) exist. This skeleton only lints
-      # for now.
+      - name: Seed synthetic domain data
+        # Idempotent (domains/<domain>/seed.py skips if already seeded) —
+        # run explicitly rather than relying on tests/integration/conftest.py's
+        # own auto-seed-on-first-use, since classifier_eval.py below reads
+        # directly from the database and does no seeding of its own.
+        run: |
+          uv run python ../domains/healthcare/seed.py
+          uv run python ../domains/fintech/seed.py
+
+      - name: Unit tests
+        run: uv run pytest tests/unit
+
+      - name: Behavioral scenario suite (pytest-bdd, spec.md's 11 scenarios)
+        run: uv run pytest tests/integration
+
+      - name: Classifier precision/recall eval (Constitution Principle VI — failing blocks merge)
+        run: |
+          uv run python eval/classifier_eval.py --domain healthcare
+          uv run python eval/classifier_eval.py --domain fintech
 
   frontend:
     name: Frontend (lint, format, build)

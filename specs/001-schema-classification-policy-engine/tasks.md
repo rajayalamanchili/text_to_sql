@@ -249,14 +249,14 @@ excluded, per FR-008 configuration) for a caller without the required role
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T065 [P] Update `README.md` with setup + quickstart pointers
-- [ ] T066 GitHub Actions CI: run the full `pytest-bdd` suite + `classifier_eval.py` on every PR, failing eval blocks merge (Constitution Principle VI) in `.github/workflows/ci.yml` (depends on T006, T030, T015-T017, T031, T041-T042, T053-T054, T057a, T052a, T044a, T058, T062)
-- [ ] T067 [P] Cross-domain regression check: assert zero domain-specific conditionals in engine source (FR-011, Success Criteria) in `backend/tests/unit/test_no_domain_conditionals.py`
-- [ ] T068 [P] NFR-001 timing test: 50-table schema classifies end-to-end in under 5 minutes in `backend/tests/integration/test_nfr001_classification_latency.py`
-- [ ] T069 [P] NFR-002 latency test: p95 enforcement-check latency ≤200ms, measured over single-query/no-concurrent-load runs (spec.md NFR-002) in `backend/tests/integration/test_nfr002_enforcement_latency.py`
-- [ ] T070 [P] Security test: assert the masking utility never emits raw sample values into an LLM prompt (FR-003, Principle I) in `backend/tests/unit/test_masking_no_raw_values.py`
+- [X] T065 [P] Update `README.md` with setup + quickstart pointers
+- [X] T066 GitHub Actions CI: run the full `pytest-bdd` suite + `classifier_eval.py` on every PR, failing eval blocks merge (Constitution Principle VI) in `.github/workflows/ci.yml` (depends on T006, T030, T015-T017, T031, T041-T042, T053-T054, T057a, T052a, T044a, T058, T062)
+- [X] T067 [P] Cross-domain regression check: assert zero domain-specific conditionals in engine source (FR-011, Success Criteria) in `backend/tests/unit/test_no_domain_conditionals.py`
+- [X] T068 [P] NFR-001 timing test: 50-table schema classifies end-to-end in under 5 minutes in `backend/tests/integration/test_nfr001_classification_latency.py`
+- [X] T069 [P] NFR-002 latency test: p95 enforcement-check latency ≤200ms, measured over single-query/no-concurrent-load runs (spec.md NFR-002) in `backend/tests/integration/test_nfr002_enforcement_latency.py`
+- [X] T070 [P] Security test: assert the masking utility never emits raw sample values into an LLM prompt (FR-003, Principle I) in `backend/tests/unit/test_masking_no_raw_values.py`
 - [ ] T071 Run `quickstart.md` validation end-to-end (including Scenarios 9, 10, and the `GET /audit-log` walkthrough) and record results
-- [ ] T072 [P] Synthetic-data safeguard test: assert `domains/healthcare/seed.py` and `domains/fintech/seed.py` only construct data via the checked-in Python-native Synthea-style/Faker generators and never read a non-local or externally-supplied connection string (FR-012, Constitution Principle VII) in `backend/tests/unit/test_synthetic_data_only.py`
+- [X] T072 [P] Synthetic-data safeguard test: assert `domains/healthcare/seed.py` and `domains/fintech/seed.py` only construct data via the checked-in Python-native Synthea-style/Faker generators and never read a non-local or externally-supplied connection string (FR-012, Constitution Principle VII) in `backend/tests/unit/test_synthetic_data_only.py`
 
 ---
 
@@ -443,3 +443,50 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   corrected 2026-07-23. A real classify/approve/publish run against
   healthcare remains possible and will advance to version 2, superseding
   this seed version — same caveat as T061.
+- **T066 (2026-07-31)**: `.github/workflows/ci.yml`'s `backend` job now
+  spins up two `postgres:16-alpine` service containers (healthcare on
+  host port 5432, fintech on 5433 — mirroring `docker-compose.yml`),
+  seeds both domains (`domains/<domain>/seed.py`, idempotent), then runs
+  `pytest tests/unit`, `pytest tests/integration` (the pytest-bdd
+  scenario suite), and `eval/classifier_eval.py` for both domains — the
+  eval script already exits non-zero on a gate failure, so no extra
+  merge-blocking logic was needed beyond letting the step fail normally.
+  DB credentials are read from repo secrets (`CI_DB_USER`,
+  `CI_DB_PASSWORD`, `CI_HEALTHCARE_DB_NAME`, `CI_FINTECH_DB_NAME`) rather
+  than hardcoded in the workflow file, per explicit user direction —
+  **these four secrets must be added under Settings > Secrets and
+  variables > Actions before this workflow will run successfully**; they
+  hold synthetic, CI-local-only values (never real credentials), but
+  Postgres will fail to start with an empty `POSTGRES_USER`/
+  `POSTGRES_PASSWORD` if they're unset. Verified: the YAML parses
+  (`python3 -c "import yaml; yaml.safe_load(...)"`), and the job's logic
+  was reasoned through against the existing codebase (upsert-based
+  classification persistence confirmed safe for the BDD suite's repeated
+  `POST /classify` calls against one shared database;
+  `classifier_eval.py` re-derives classifications in an in-memory
+  `_CollectingStore` and never reads persisted records, so BDD-suite
+  state has no effect on its precision/recall numbers) — but this
+  sandbox has no Docker/Postgres, so the workflow itself was never
+  executed end-to-end. Worth confirming on the first real PR.
+- **T068 (2026-07-31)**: the test uses an in-memory fake DB connection
+  and a near-instant stub LLM client (same pattern as
+  `test_classification_graph.py`), asserting the engine's own
+  per-column overhead alone clears a 30s bound — 1/10th of NFR-001's
+  300s budget — rather than timing a real Postgres + Anthropic API run,
+  which isn't reproducible deterministically in CI. **Flagging a real
+  risk surfaced while building this fixture, not fixed here**:
+  `llm_classify_node` (`backend/src/graph/classification_graph.py`)
+  `await`s `classify_with_llm` sequentially, one column at a time, and
+  the heuristic scorer (`heuristic_classifier.py`) only clears the
+  0.85 auto-approval threshold for columns matching a PII/PHI name
+  keyword — every other column (most non-PII operational columns: ids,
+  timestamps, status/amount fields, free text) scores 0.5–0.7 and falls
+  through to the LLM pass. For a realistic 50-table schema that's
+  plausibly 250-300+ sequential real LLM calls against the default
+  `claude-opus-4-8` model (`anthropic_client.py`); at even ~1s/call that
+  alone exceeds NFR-001's 300s budget. This test cannot catch that
+  because it stubs LLM latency to ~0 (see above). Worth a follow-up
+  task — e.g. bounded concurrent LLM dispatch — before trusting NFR-001
+  against a real 50-table schema; raised to the user in-session rather
+  than silently fixed, since it's an architecture change beyond "add a
+  timing test."
