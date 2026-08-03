@@ -67,8 +67,7 @@ def test_resolves_join_with_aliases():
     )
     resolved = resolve_columns(
         _parse(
-            "SELECT p.patient_ssn FROM patients p "
-            "JOIN encounters e ON p.patient_id = e.patient_id"
+            "SELECT p.patient_ssn FROM patients p JOIN encounters e ON p.patient_id = e.patient_id"
         ),
         schema,
     )

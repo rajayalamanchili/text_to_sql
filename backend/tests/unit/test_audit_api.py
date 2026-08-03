@@ -113,9 +113,7 @@ def test_decision_filter_is_forwarded_to_the_query(configured_domains):
 
     with patch("src.api.audit.psycopg.connect", side_effect=connect):
         client = TestClient(_build_test_app())
-        response = client.get(
-            "/audit-log", params={"domain": "healthcare", "decision": "allow"}
-        )
+        response = client.get("/audit-log", params={"domain": "healthcare", "decision": "allow"})
 
     assert response.status_code == 200, response.text
     cursor = captured["conn"].cursor()

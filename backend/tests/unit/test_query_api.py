@@ -174,9 +174,7 @@ def test_rejects_body_with_both_question_and_sql(configured_domains):
 def test_rejects_body_with_neither_question_nor_sql(configured_domains):
     client = TestClient(_build_test_app())
 
-    response = client.post(
-        "/domains/fintech/query", json={}, headers={"X-Steward-Role": "analyst"}
-    )
+    response = client.post("/domains/fintech/query", json={}, headers={"X-Steward-Role": "analyst"})
 
     assert response.status_code == 422
 

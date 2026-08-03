@@ -52,11 +52,7 @@ def assert_rejected(query_response, status):
     assert query_response.status_code == status, query_response.text
 
 
-@then(
-    parsers.parse(
-        'the rejection reason code is "{reason_code}" with message "{reason_message}"'
-    )
-)
+@then(parsers.parse('the rejection reason code is "{reason_code}" with message "{reason_message}"'))
 def assert_reason_code_and_message(query_response, reason_code, reason_message):
     body = query_response.json()
     assert body["reason_code"] == reason_code, body

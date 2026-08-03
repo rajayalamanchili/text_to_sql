@@ -117,13 +117,11 @@ def assert_column_is_status(api_client, table_column, status, domain):
 
 @then(
     parsers.parse(
-        "the audit log records the admin's identity for the approval in domain \"{domain}\""
+        'the audit log records the admin\'s identity for the approval in domain "{domain}"'
     )
 )
 def assert_audit_log_records_admin(api_client, domain):
-    resp = api_client.get(
-        "/audit-log", params={"domain": domain, "decision": "classify_approved"}
-    )
+    resp = api_client.get("/audit-log", params={"domain": domain, "decision": "classify_approved"})
     assert resp.status_code == 200, resp.text
     items = resp.json()["items"]
     assert any(item["actor_role"] == "admin" for item in items), items
