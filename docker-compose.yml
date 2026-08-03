@@ -1,0 +1,107 @@
+services:
+  healthcare-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${HEALTHCARE_DB_USER:?set HEALTHCARE_DB_USER in .env}
+      POSTGRES_PASSWORD: ${HEALTHCARE_DB_PASSWORD:?set HEALTHCARE_DB_PASSWORD in .env}
+      POSTGRES_DB: ${HEALTHCARE_DB_NAME:?set HEALTHCARE_DB_NAME in .env}
+    ports:
+      - "${HEALTHCARE_DB_PORT:-5432}:5432"
+    volumes:
+      - healthcare-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${HEALTHCARE_DB_USER} -d ${HEALTHCARE_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  fintech-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${FINTECH_DB_USER:?set FINTECH_DB_USER in .env}
+      POSTGRES_PASSWORD: ${FINTECH_DB_PASSWORD:?set FINTECH_DB_PASSWORD in .env}
+      POSTGRES_DB: ${FINTECH_DB_NAME:?set FINTECH_DB_NAME in .env}
+    ports:
+      - "${FINTECH_DB_PORT:-5433}:5432"
+    volumes:
+      - fintech-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FINTECH_DB_USER} -d ${FINTECH_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot init jobs (T014): seed each domain's Postgres instance from its
+  # domains/<domain>/schema.sql + seed.py (T012, T013) before the backend
+  # starts serving. Same image as `backend` (built once, tagged, reused —
+  # see the shared `image:` key) since seed.py depends on the backend
+  # venv's psycopg/faker packages; `domains/` is volume-mounted rather than
+  # baked into the image, matching how `backend` already mounts it.
+  healthcare-seed:
+    build:
+      context: ./backend
+    image: steward-backend:local
+    command: ["python", "domains/healthcare/seed.py"]
+    environment:
+      HEALTHCARE_DATABASE_URL: postgresql://${HEALTHCARE_DB_USER}:${HEALTHCARE_DB_PASSWORD}@healthcare-db:5432/${HEALTHCARE_DB_NAME}
+    volumes:
+      - ./domains:/app/domains
+    depends_on:
+      healthcare-db:
+        condition: service_healthy
+
+  fintech-seed:
+    build:
+      context: ./backend
+    image: steward-backend:local
+    command: ["python", "domains/fintech/seed.py"]
+    environment:
+      FINTECH_DATABASE_URL: postgresql://${FINTECH_DB_USER}:${FINTECH_DB_PASSWORD}@fintech-db:5432/${FINTECH_DB_NAME}
+    volumes:
+      - ./domains:/app/domains
+    depends_on:
+      fintech-db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+    image: steward-backend:local
+    environment:
+      HEALTHCARE_DATABASE_URL: postgresql://${HEALTHCARE_DB_USER}:${HEALTHCARE_DB_PASSWORD}@healthcare-db:5432/${HEALTHCARE_DB_NAME}
+      FINTECH_DATABASE_URL: postgresql://${FINTECH_DB_USER}:${FINTECH_DB_PASSWORD}@fintech-db:5432/${FINTECH_DB_NAME}
+      STEWARD_CORS_ALLOWED_ORIGINS: ${STEWARD_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      # Optional (tech-stack.md: Anthropic primary/OpenAI secondary,
+      # provider-agnostic): unset falls back to `NullLLMClient`
+      # (anthropic_client.py) — every column stays at its heuristic score,
+      # so most non-keyword-matched columns land in pending_review instead
+      # of auto-approving via the LLM-assisted pass (quickstart.md step 1).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./policies:/app/policies
+      - ./domains:/app/domains
+    depends_on:
+      healthcare-db:
+        condition: service_healthy
+      fintech-db:
+        condition: service_healthy
+      healthcare-seed:
+        condition: service_completed_successfully
+      fintech-seed:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  healthcare-db-data:
+  fintech-db-data:

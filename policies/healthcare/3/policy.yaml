@@ -1,0 +1,59 @@
+domain: healthcare
+version: 3
+tables:
+- table_name: column_classifications
+  columns:
+    column_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    table_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+  row_policy_template: null
+- table_name: encounters
+  columns:
+    provider_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+  row_policy_template: null
+- table_name: patients
+  columns:
+    address:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+    diagnosis_code:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    first_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    last_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    patient_ssn:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    zip:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+  row_policy_template: null
+approved_by: admin
+approved_at: '2026-07-31T10:03:50.923119Z'

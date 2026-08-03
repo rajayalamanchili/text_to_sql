@@ -1,0 +1,308 @@
+domain: fintech
+version: 8
+tables:
+- table_name: accounts
+  columns:
+    account_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    account_type:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    balance:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    customer_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    opened_date:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+  row_policy_template: null
+- table_name: audit_log
+  columns:
+    actor_role:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    decision:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    domain:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    policy_version_used:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    query_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    raw_query_hash:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    reason_code:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    reason_message:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    timestamp:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+  row_policy_template: null
+- table_name: claims
+  columns:
+    claim_amount:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    claim_date:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    claim_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    claim_status:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    customer_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    member_ssn:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    tenant_id:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+  row_policy_template: tenant_id = :current_tenant
+- table_name: column_classifications
+  columns:
+    cardinality_ratio:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    classification:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    column_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    confidence:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    data_type:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    domain:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    heuristic_score:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    llm_rationale:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    llm_score:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    reviewed_at:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    reviewed_by:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    source:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    status:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    table_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+  row_policy_template: null
+- table_name: customers
+  columns:
+    address:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+    city:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    created_at:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    customer_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    email:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+    first_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    last_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    phone:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+    state:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    tenant_id:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    zip:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+  row_policy_template: null
+- table_name: transactions
+  columns:
+    account_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    amount:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    balance_after:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    balance_before:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    is_fraud:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    notes:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    transaction_date:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    transaction_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    transaction_type:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+  row_policy_template: null
+approved_by: admin
+approved_at: '2026-08-03T09:13:12.843219Z'

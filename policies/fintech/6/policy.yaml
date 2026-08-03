@@ -1,0 +1,80 @@
+domain: fintech
+version: 6
+tables:
+- table_name: accounts
+  columns:
+    balance:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+  row_policy_template: null
+- table_name: claims
+  columns:
+    member_ssn:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+  row_policy_template: null
+- table_name: column_classifications
+  columns:
+    column_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    table_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+  row_policy_template: null
+- table_name: customers
+  columns:
+    address:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+    email:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+    first_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    last_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    phone:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+    zip:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+  row_policy_template: null
+- table_name: transactions
+  columns:
+    balance_after:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    balance_before:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+  row_policy_template: null
+approved_by: admin
+approved_at: '2026-07-31T10:03:57.563216Z'

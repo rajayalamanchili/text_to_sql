@@ -3,7 +3,7 @@
 **Project**: Steward
 **Status**: Locked for Milestone 1 — changes require updating this file
 with rationale, not silent drift inside an individual feature's `plan.md`
-**Last amended**: 2026-07-23
+**Last amended**: 2026-07-29 (Healthcare synthetic data row — see Data layer)
 
 ## Purpose
 
@@ -48,7 +48,7 @@ end-user-product scope by accident.
 | Concern | Choice | Rationale |
 |---|---|---|
 | Database (per domain) | PostgreSQL | Realistic enterprise-grade RDBMS; single engine works across both healthcare and fintech domain databases, each as a separate Postgres instance/schema. |
-| Healthcare synthetic data | Synthea | Widely used, credible synthetic-PHI generator; avoids ever touching real patient data (Constitution Principle VII). |
+| Healthcare synthetic data | Python-native Synthea-style generator (`Faker` + curated ICD-10-style diagnosis-code/clinical-note pools) | Amended 2026-07-29 (T012): the actual Synthea tool is Java-based and this project's dev/CI environment has no JVM. Running real Synthea would add an undocumented Java toolchain dependency to the backend image purely for seed data. A Python-native generator, reusing the `Faker` dependency already locked in for fintech, produces data in Synthea's characteristic shape (patients/encounters/conditions, realistic demographics, ICD-10-style codes, free-text clinical narrative) without that dependency. Loading a pre-generated Synthea CSV export was considered and rejected as a heavier, less-transparent alternative for a synthetic seed script whose only job is to exercise the classifier/enforcement paths realistically. If a later milestone needs Synthea's actual clinical realism (e.g. longitudinal encounter chains), revisit then. |
 | Fintech synthetic data | Faker-generated schema + PaySim-style transaction patterns | Realistic without licensing or real-account-data risk. |
 | Policy artifact storage | Versioned YAML files in git (Milestone 1) | Diffable, reviewable via PR, satisfies NFR-003. Migration to a database-backed policy store is a candidate for a later milestone if needed — not assumed now. |
 | Future RAG vector store (Milestone 2) | `pgvector` extension on the existing Postgres instances | Avoids introducing a second database technology just for embeddings; deferred until Milestone 2 begins. |

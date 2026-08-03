@@ -56,12 +56,12 @@ required to prove the core guardrail claim.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create backend Python project (`uv`, `pyproject.toml`, FastAPI/LangGraph/sqlglot/Pydantic/structlog deps) per `plan.md` structure in `backend/`
-- [ ] T002 Create frontend Next.js (TypeScript, Tailwind) project per `plan.md` structure in `frontend/`
-- [ ] T003 [P] Configure Python linting/formatting (ruff) in `backend/pyproject.toml`
-- [ ] T004 [P] Configure TypeScript linting/formatting (eslint/prettier) in `frontend/`
-- [ ] T005 Docker Compose config for 2× Postgres (healthcare, fintech), backend, frontend in `docker-compose.yml`
-- [ ] T006 [P] GitHub Actions CI skeleton in `.github/workflows/ci.yml`
+- [X] T001 Create backend Python project (`uv`, `pyproject.toml`, FastAPI/LangGraph/sqlglot/Pydantic/structlog deps) per `plan.md` structure in `backend/`
+- [X] T002 Create frontend Next.js (TypeScript, Tailwind) project per `plan.md` structure in `frontend/`
+- [X] T003 [P] Configure Python linting/formatting (ruff) in `backend/pyproject.toml`
+- [X] T004 [P] Configure TypeScript linting/formatting (eslint/prettier) in `frontend/`
+- [X] T005 Docker Compose config for 2× Postgres (healthcare, fintech), backend, frontend in `docker-compose.yml`
+- [X] T006 [P] GitHub Actions CI skeleton in `.github/workflows/ci.yml`
 
 ---
 
@@ -69,14 +69,14 @@ required to prove the core guardrail claim.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T007 Domain config loader (`healthcare`/`fintech` directory convention, FR-011) in `backend/src/config/domains.py`
-- [ ] T008 [P] Postgres `audit_log` table migration (data-model.md#AuditLogEntry) in `backend/src/db/migrations/0001_audit_log.sql`
-- [ ] T009 [P] `structlog` configuration + `AuditLogEntry` model and writer, with `reason_code` as a fixed reason-code enum (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR`) plus a rendered `reason_message` (FR-010, research.md §8) in `backend/src/services/audit/audit_log.py`
-- [ ] T010 [P] `Caller`/`Role` model + auth-stub FastAPI dependency parsing `X-Steward-Role`, defaulting to `analyst` (research.md §7) in `backend/src/api/deps.py`
-- [ ] T011 FastAPI app skeleton + router registration in `backend/src/api/main.py` (depends on T010)
-- [ ] T012 [P] Healthcare domain schema + Synthea-derived seed script (research.md §10) in `domains/healthcare/schema.sql`, `domains/healthcare/seed.py`
-- [ ] T013 [P] Fintech domain schema + Faker/PaySim-style seed script (research.md §10) in `domains/fintech/schema.sql`, `domains/fintech/seed.py`
-- [ ] T014 Wire both domain Postgres instances + seed scripts into Docker Compose init (depends on T005, T012, T013) in `docker-compose.yml`
+- [X] T007 Domain config loader (`healthcare`/`fintech` directory convention, FR-011) in `backend/src/config/domains.py`
+- [X] T008 [P] Postgres `audit_log` table migration (data-model.md#AuditLogEntry) in `backend/src/db/migrations/0001_audit_log.sql`
+- [X] T009 [P] `structlog` configuration + `AuditLogEntry` model and writer, with `reason_code` as a fixed reason-code enum (`COLUMN_BLOCKED`, `NO_ACTIVE_POLICY`, `DML_REJECTED`, `MULTIPLE_STATEMENTS_REJECTED`, `ROLE_GATE_MISMATCH`, `SCHEMA_NOT_CLASSIFIED`, `QUESTION_NOT_MAPPED`, `ENFORCEMENT_ERROR`) plus a rendered `reason_message` (FR-010, research.md §8) in `backend/src/services/audit/audit_log.py`
+- [X] T010 [P] `Caller`/`Role` model + auth-stub FastAPI dependency parsing `X-Steward-Role` (defaulting to `analyst`) and `X-Steward-Tenant` (data-model.md#Caller, research.md §7) in `backend/src/api/deps.py`
+- [X] T011 FastAPI app skeleton + router registration in `backend/src/api/main.py` (depends on T010)
+- [X] T012 [P] Healthcare domain schema + Python-native Synthea-style seed script (research.md §10) in `domains/healthcare/schema.sql`, `domains/healthcare/seed.py`
+- [X] T013 [P] Fintech domain schema + Faker/PaySim-style seed script (research.md §10) in `domains/fintech/schema.sql`, `domains/fintech/seed.py`
+- [X] T014 Wire both domain Postgres instances + seed scripts into Docker Compose init (depends on T005, T012, T013) in `docker-compose.yml`
 
 **Checkpoint**: Foundation ready — user story implementation can now begin.
 
@@ -96,25 +96,26 @@ A low-confidence fintech `notes` column lands in `pending_review`, confidence
 
 ### Tests for User Story 1
 
-- [ ] T015 [P] [US1] BDD step defs for Scenario 1 (obvious PII classified correctly) in `backend/tests/integration/test_scenario1_pii_direct.py`
-- [ ] T016 [P] [US1] BDD step defs for Scenario 2 (ambiguous column → human review) in `backend/tests/integration/test_scenario2_review_queue.py`
-- [ ] T017 [P] [US1] BDD step defs for Scenario 3 (adversarial column not misclassified safe) in `backend/tests/integration/test_scenario3_adversarial.py`
+- [X] T015 [P] [US1] BDD step defs for Scenario 1 (obvious PII classified correctly) in `backend/tests/integration/test_scenario1_pii_direct.py`
+- [X] T016 [P] [US1] BDD step defs for Scenario 2 (ambiguous column → human review) in `backend/tests/integration/test_scenario2_review_queue.py`
+- [X] T017 [P] [US1] BDD step defs for Scenario 3 (adversarial column not misclassified safe) in `backend/tests/integration/test_scenario3_adversarial.py`
 
 ### Implementation for User Story 1
 
-- [ ] T018 [P] [US1] `ColumnClassification` Pydantic model (data-model.md) in `backend/src/models/column_classification.py`
-- [ ] T019 [US1] Schema enumeration service, no LLM calls, no raw row data (FR-001) in `backend/src/services/enumeration/schema_enumerator.py` (depends on T007)
-- [ ] T020 [P] [US1] Heuristic classifier: name-pattern dictionary + type/cardinality signals + capped 0.95 confidence + adversarial free-text default to `sensitive_category` (research.md §1–2) in `backend/src/services/classification/heuristic_classifier.py` (depends on T018)
-- [ ] T021 [P] [US1] Value-pattern masking utility: length buckets + regex-generalized pattern classes, never raw values (research.md §3) in `backend/src/services/classification/masking.py`
-- [ ] T022 [US1] LLM-assisted classifier consuming only masked input (FR-003) in `backend/src/services/classification/llm_classifier.py` (depends on T021)
-- [ ] T023 [US1] Confidence combination logic: agree → max, disagree → more-sensitive category wins + min confidence (research.md §4) in `backend/src/services/classification/confidence.py` (depends on T020, T022)
-- [ ] T024 [US1] Classification LangGraph graph: enumerate → heuristic → confidence gate → llm (conditional) → persist (research.md §9) in `backend/src/graph/classification_graph.py` (depends on T019, T023)
-- [ ] T025 [US1] `POST /domains/{domain}/schema/enumerate` endpoint (contracts/api.md) in `backend/src/api/schema.py` (depends on T019, T011)
-- [ ] T026 [US1] `POST /domains/{domain}/classify` endpoint (contracts/api.md) in `backend/src/api/classify.py` (depends on T024)
-- [ ] T027 [US1] Persist classification results + `classify_*` audit log entries in `backend/src/services/classification/persistence.py` (depends on T009, T018)
-- [ ] T028 [P] [US1] Hand-labeled ground truth set (20–30 columns) for healthcare in `backend/eval/ground_truth/healthcare.csv`
-- [ ] T029 [P] [US1] Hand-labeled ground truth set (20–30 columns) for fintech in `backend/eval/ground_truth/fintech.csv`
-- [ ] T030 [US1] Classifier precision/recall eval script (Success Criteria: ≥0.85 on `pii_direct`) in `backend/eval/classifier_eval.py` (depends on T028, T029)
+- [X] T018 [P] [US1] `ColumnClassification` Pydantic model (data-model.md) in `backend/src/models/column_classification.py`
+- [X] T019 [US1] Schema enumeration service, no LLM calls, no raw row data (FR-001) in `backend/src/services/enumeration/schema_enumerator.py` (depends on T007)
+- [X] T020 [P] [US1] Heuristic classifier: name-pattern dictionary + type/cardinality signals + capped 0.95 confidence + adversarial free-text default to `sensitive_category` (research.md §1–2) in `backend/src/services/classification/heuristic_classifier.py` (depends on T018)
+- [X] T021 [P] [US1] Value-pattern masking utility: length buckets + regex-generalized pattern classes, never raw values (research.md §3) in `backend/src/services/classification/masking.py`
+- [X] T022 [US1] LLM-assisted classifier consuming only masked input (FR-003) in `backend/src/services/classification/llm_classifier.py` (depends on T021)
+- [X] T023 [US1] Confidence combination logic: agree → max, disagree → more-sensitive category wins + min confidence (research.md §4) in `backend/src/services/classification/confidence.py` (depends on T020, T022)
+- [X] T024 [US1] Classification LangGraph graph: enumerate → heuristic → confidence gate → llm (conditional) → persist (research.md §9) in `backend/src/graph/classification_graph.py` (depends on T019, T023)
+- [X] T025 [US1] `POST /domains/{domain}/schema/enumerate` endpoint (contracts/api.md) in `backend/src/api/schema.py` (depends on T019, T011)
+- [X] T026 [US1] `POST /domains/{domain}/classify` endpoint (contracts/api.md) in `backend/src/api/classify.py` (depends on T024)
+- [X] T027 [US1] Persist classification results + `classify_*` audit log entries in `backend/src/services/classification/persistence.py` (depends on T009, T018)
+- [X] T027a [US1] `GET /domains/{domain}/classifications` endpoint, any status, optional `table`/`column` filters (contracts/api.md, added 2026-07-29 to close a gap T015/T017's BDD tests surfaced — neither `/review-queue` nor `/policy` can answer "what did the pipeline decide for this column, right now") in `backend/src/api/classify.py` (depends on T027)
+- [X] T028 [P] [US1] Hand-labeled ground truth set (20–30 columns) for healthcare in `backend/eval/ground_truth/healthcare.csv`
+- [X] T029 [P] [US1] Hand-labeled ground truth set (20–30 columns) for fintech in `backend/eval/ground_truth/fintech.csv`
+- [X] T030 [US1] Classifier precision/recall eval script (Success Criteria: ≥0.85 on `pii_direct`) in `backend/eval/classifier_eval.py` (depends on T028, T029)
 
 **Checkpoint**: US1 fully functional and testable independently of review UI or enforcement.
 
@@ -131,19 +132,19 @@ the record `pending_review`; an `admin`-role approve returns 200, sets
 
 ### Tests for User Story 2
 
-- [ ] T031 [P] [US2] BDD step defs for Scenario 8 (only admin can approve) in `backend/tests/integration/test_scenario8_admin_approval.py`
+- [X] T031 [P] [US2] BDD step defs for Scenario 8 (only admin can approve) in `backend/tests/integration/test_scenario8_admin_approval.py`
 
 ### Implementation for User Story 2
 
-- [ ] T032 [US2] `GET /domains/{domain}/review-queue` endpoint (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T018, T011)
-- [ ] T033 [US2] `POST .../review-queue/{column_id}/approve` endpoint, admin-only (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T032)
-- [ ] T034 [US2] `POST .../review-queue/{column_id}/reject` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
-- [ ] T035 [US2] `POST .../review-queue/{column_id}/reclassify` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
-- [ ] T036 [US2] Audit logging for approve/reject/reclassify actions, recording actor identity (FR-013) in `backend/src/services/audit/audit_log.py` (depends on T033, T034, T035)
-- [ ] T037 [P] [US2] Admin review queue Next.js route in `frontend/src/app/admin-review/page.tsx`
-- [ ] T038 [P] [US2] Review queue table component (column, proposed classification, confidence, source signals) in `frontend/src/app/admin-review/components/ReviewQueueTable.tsx`
-- [ ] T039 [US2] Approve/reject/reclassify actions wired to generated OpenAPI client in `frontend/src/app/admin-review/actions.ts` (depends on T032-T035, T037)
-- [ ] T040 [US2] Role-based UI guard hiding approve/reject controls from non-admin callers in `frontend/src/app/admin-review/page.tsx` (depends on T037)
+- [X] T032 [US2] `GET /domains/{domain}/review-queue` endpoint — a `status == "pending_review"`-filtered view of T027a's classification store, not a separate one (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T018, T011, T027a)
+- [X] T033 [US2] `POST .../review-queue/{column_id}/approve` endpoint, admin-only (contracts/api.md) in `backend/src/api/review_queue.py` (depends on T032)
+- [X] T034 [US2] `POST .../review-queue/{column_id}/reject` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
+- [X] T035 [US2] `POST .../review-queue/{column_id}/reclassify` endpoint, admin-only in `backend/src/api/review_queue.py` (depends on T032)
+- [X] T036 [US2] Audit logging for approve/reject/reclassify actions, recording actor identity (FR-013) in `backend/src/services/audit/audit_log.py` (depends on T033, T034, T035)
+- [X] T037 [P] [US2] Admin review queue Next.js route in `frontend/src/app/admin-review/page.tsx`
+- [X] T038 [P] [US2] Review queue table component (column, proposed classification, confidence, source signals) in `frontend/src/app/admin-review/components/ReviewQueueTable.tsx`
+- [X] T039 [US2] Approve/reject/reclassify actions wired to generated OpenAPI client in `frontend/src/app/admin-review/actions.ts` (depends on T032-T035, T037)
+- [X] T040 [US2] Role-based UI guard hiding approve/reject controls from non-admin callers in `frontend/src/app/admin-review/page.tsx` (depends on T037)
 
 **Checkpoint**: US1 + US2 both work independently — schema can be classified and reviewed end to end.
 
@@ -172,28 +173,29 @@ domain/time/decision (NFR-004).
 
 ### Tests for User Story 3
 
-- [ ] T041 [P] [US3] BDD step defs for Scenario 4 (deterministic guardrail overrides incorrect LLM proposal) in `backend/tests/integration/test_scenario4_block_override.py`
-- [ ] T042 [P] [US3] BDD step defs for Scenario 6 (unclassified column defaults to blocked) in `backend/tests/integration/test_scenario6_default_closed.py`
+- [X] T041 [P] [US3] BDD step defs for Scenario 4 (deterministic guardrail overrides incorrect LLM proposal) in `backend/tests/integration/test_scenario4_block_override.py`
+- [X] T042 [P] [US3] BDD step defs for Scenario 6 (unclassified column defaults to blocked) in `backend/tests/integration/test_scenario6_default_closed.py`
 
 ### Implementation for User Story 3
 
-- [ ] T043 [P] [US3] `PolicyArtifact`/`PolicyTable`/`PolicyColumn` Pydantic models (data-model.md) in `backend/src/models/policy_artifact.py`
-- [ ] T044 [US3] Policy store: versioned YAML read/write + manifest-based active-version resolution (research.md §6) in `backend/src/services/policy/policy_store.py` (depends on T043)
-- [ ] T045 [US3] `POST /domains/{domain}/policy/publish` endpoint, admin-only, built from all `approved` classifications (contracts/api.md) in `backend/src/api/policy.py` (depends on T044, T027)
-- [ ] T046 [US3] `GET /domains/{domain}/policy` endpoint in `backend/src/api/policy.py` (depends on T044)
-- [ ] T047 [US3] `sqlglot`-based column resolver: `SELECT *`, joins, CTEs, subqueries → concrete `table.column` (research.md §5) in `backend/src/services/enforcement/column_resolver.py`
-- [ ] T048 [US3] Deterministic enforcement node: `allow`/`block` decision + default-closed for any unresolved or policy-absent column (FR-007, FR-009); on policy-load failure or unexpected internal error, reject with reason `ENFORCEMENT_ERROR` (FR-007, Scenario 11); when multiple violations co-occur, report by severity ranking, not AST scan order (FR-007) in `backend/src/services/enforcement/enforcer.py` (depends on T047, T044)
-- [ ] T049 [US3] Minimal SQL proposal step (accepts `question` or raw `sql`, per spec "Out of Scope" — not production NL→SQL quality) in `backend/src/services/generation/sql_proposal.py`
-- [ ] T050 [US3] Query LangGraph graph: generate → deterministic enforce → execute (only if passed) → audit (research.md §9) in `backend/src/graph/query_graph.py` (depends on T048, T049)
-- [ ] T051 [US3] `POST /domains/{domain}/query` endpoint (contracts/api.md) in `backend/src/api/query.py` (depends on T050)
-- [ ] T052 [US3] Enforcement-decision audit logging: `decision` (allow/block/mask) + `reason_code` + rendered `reason_message`, per the FR-010 enum (T009) in `backend/src/services/audit/audit_log.py` (depends on T048, T009)
-- [ ] T053 [P] [US3] BDD step defs for Scenario 9 (DML-attempt statement rejected unconditionally, including stacked multi-statement input rejected with reason `MULTIPLE_STATEMENTS_REJECTED`, FR-014) in `backend/tests/integration/test_scenario9_dml_rejected.py`
-- [ ] T054 [P] [US3] BDD step defs for Scenario 10 (irrelevant question does not leak schema or bypass enforcement) in `backend/tests/integration/test_scenario10_irrelevant_question.py`
-- [ ] T055 [US3] DML/non-`SELECT` statement guard: reject any statement whose `sqlglot`-parsed root is not a single `SELECT`, including input that parses into more than one statement (reason `MULTIPLE_STATEMENTS_REJECTED`), before any column/table policy check (FR-014, research.md §5) in `backend/src/services/enforcement/enforcer.py` (depends on T047)
-- [ ] T056 [US3] Irrelevant-question handling in the query graph: no schema-relevant mapping → return `"question not mapped to schema"` without generating or executing SQL (FR-014, Scenario 10) in `backend/src/graph/query_graph.py` (depends on T050)
-- [ ] T057 [US3] `GET /audit-log` endpoint with domain/time-range/decision-type filters (contracts/api.md, NFR-004) in `backend/src/api/audit.py` (depends on T008, T009)
-- [ ] T057a [P] [US3] BDD step defs for Scenario 11 (enforcement-path failure fails closed, reason `ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario11_enforcement_error.py`
-- [ ] T052a [US3] Unit test: when a query trips multiple independent policy violations simultaneously, the reported reason follows FR-007's severity ranking (`ENFORCEMENT_ERROR`/`NO_ACTIVE_POLICY`/`COLUMN_BLOCKED` > `ROLE_GATE_MISMATCH` > row-policy injection), not AST scan order in `backend/tests/unit/test_enforcement_severity_ranking.py` (depends on T048)
+- [X] T043 [P] [US3] `PolicyArtifact`/`PolicyTable`/`PolicyColumn` Pydantic models (data-model.md) in `backend/src/models/policy_artifact.py`
+- [X] T044 [US3] Policy store: versioned YAML read/write + manifest-based active-version resolution (research.md §6) in `backend/src/services/policy/policy_store.py` (depends on T043)
+- [X] T044a [US3] Unit test: a policy publish occurring mid-evaluation of an in-flight query does not affect that query's resolved policy version — the version is read once at the start of enforcement and reused for every check (FR-007) in `backend/tests/unit/test_policy_version_pinning.py` (depends on T044, T048)
+- [X] T045 [US3] `POST /domains/{domain}/policy/publish` endpoint, admin-only, built from all `approved` classifications (contracts/api.md) in `backend/src/api/policy.py` (depends on T044, T027)
+- [X] T046 [US3] `GET /domains/{domain}/policy` endpoint in `backend/src/api/policy.py` (depends on T044)
+- [X] T047 [US3] `sqlglot`-based column resolver: `SELECT *`, joins, CTEs, subqueries → concrete `table.column` (research.md §5) in `backend/src/services/enforcement/column_resolver.py`
+- [X] T048 [US3] Deterministic enforcement node: `allow`/`block` decision + default-closed for any unresolved or policy-absent column (FR-007, FR-009); on policy-load failure or unexpected internal error, reject with reason `ENFORCEMENT_ERROR` (FR-007, Scenario 11); when multiple violations co-occur, report by severity ranking, not AST scan order (FR-007) in `backend/src/services/enforcement/enforcer.py` (depends on T047, T044)
+- [X] T049 [US3] Minimal SQL proposal step (accepts `question` or raw `sql`, per spec "Out of Scope" — not production NL→SQL quality) in `backend/src/services/generation/sql_proposal.py`
+- [X] T050 [US3] Query LangGraph graph: generate → deterministic enforce → execute (only if passed) → audit (research.md §9) in `backend/src/graph/query_graph.py` (depends on T048, T049)
+- [X] T051 [US3] `POST /domains/{domain}/query` endpoint (contracts/api.md) in `backend/src/api/query.py` (depends on T050)
+- [X] T052 [US3] Enforcement-decision audit logging: `decision` (allow/block/mask) + `reason_code` + rendered `reason_message`, per the FR-010 enum (T009) in `backend/src/services/audit/audit_log.py` (depends on T048, T009)
+- [X] T053 [P] [US3] BDD step defs for Scenario 9 (DML-attempt statement rejected unconditionally, including stacked multi-statement input rejected with reason `MULTIPLE_STATEMENTS_REJECTED`, FR-014) in `backend/tests/integration/test_scenario9_dml_rejected.py`
+- [X] T054 [P] [US3] BDD step defs for Scenario 10 (irrelevant question does not leak schema or bypass enforcement) in `backend/tests/integration/test_scenario10_irrelevant_question.py`
+- [X] T055 [US3] DML/non-`SELECT` statement guard: reject any statement whose `sqlglot`-parsed root is not a single `SELECT`, including input that parses into more than one statement (reason `MULTIPLE_STATEMENTS_REJECTED`), before any column/table policy check (FR-014, research.md §5) in `backend/src/services/enforcement/enforcer.py` (depends on T047)
+- [X] T056 [US3] Irrelevant-question handling in the query graph: no schema-relevant mapping → return `"question not mapped to schema"` without generating or executing SQL (FR-014, Scenario 10) in `backend/src/graph/query_graph.py` (depends on T050)
+- [X] T057 [US3] `GET /audit-log` endpoint with domain/time-range/decision-type filters (contracts/api.md, NFR-004) in `backend/src/api/audit.py` (depends on T008, T009)
+- [X] T057a [P] [US3] BDD step defs for Scenario 11 (enforcement-path failure fails closed, reason `ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario11_enforcement_error.py`
+- [X] T052a [US3] Unit test: when a query trips multiple independent policy violations simultaneously, the reported reason follows FR-007's severity ranking (`ENFORCEMENT_ERROR`/`NO_ACTIVE_POLICY`/`COLUMN_BLOCKED` > `ROLE_GATE_MISMATCH` > row-policy injection), not AST scan order in `backend/tests/unit/test_enforcement_severity_ranking.py` (depends on T048)
 
 **Checkpoint**: US1 + US2 + US3 complete — this is the MVP. The core Constitution Principle I/II/VIII guarantee (classify, review, enforce-closed, DML-safe, auditable) is fully demoable.
 
@@ -211,13 +213,13 @@ predicate and never returns cross-tenant rows (Scenario 5).
 
 ### Tests for User Story 4
 
-- [ ] T058 [P] [US4] BDD step defs for Scenario 5 (row-level policy applied regardless of LLM predicates) in `backend/tests/integration/test_scenario5_row_policy.py`
+- [X] T058 [P] [US4] BDD step defs for Scenario 5 (row-level policy applied regardless of LLM predicates, including the fail-closed case where `X-Steward-Tenant` is absent/malformed for a tenant-scoped table, expecting `reason_code: ENFORCEMENT_ERROR`) in `backend/tests/integration/test_scenario5_row_policy.py`
 
 ### Implementation for User Story 4
 
-- [ ] T059 [US4] Row-predicate injector: AST-level `WHERE`-clause manipulation, not string concatenation; AND-merges the policy predicate with any existing `WHERE` clause the LLM's SQL already contains, never overwriting or stripping it (research.md §5.3, Scenario 5) in `backend/src/services/enforcement/row_predicate_injector.py` (depends on T047)
-- [ ] T060 [US4] Wire row-predicate injection into the enforcement node in `backend/src/services/enforcement/enforcer.py` (depends on T048, T059)
-- [ ] T061 [US4] Add `tenant_id` `row_policy_template` to the fintech policy artifact in `policies/fintech/<version>/policy.yaml` (depends on T044)
+- [X] T059 [US4] Row-predicate injector: AST-level `WHERE`-clause manipulation, not string concatenation; AND-merges the policy predicate with any existing `WHERE` clause the LLM's SQL already contains, never overwriting or stripping it; binds `:current_tenant` from `Caller.tenant_id` (T010), rejecting with `ENFORCEMENT_ERROR` if the table requires it and it's absent/malformed (research.md §5.3, spec.md FR-008, Scenario 5) in `backend/src/services/enforcement/row_predicate_injector.py` (depends on T047, T010)
+- [X] T060 [US4] Wire row-predicate injection into the enforcement node in `backend/src/services/enforcement/enforcer.py` (depends on T048, T059)
+- [X] T061 [US4] Add `tenant_id` `row_policy_template` to the fintech policy artifact in `policies/fintech/<version>/policy.yaml` (depends on T044)
 
 **Checkpoint**: US1–US4 all independently functional.
 
@@ -234,12 +236,12 @@ excluded, per FR-008 configuration) for a caller without the required role
 
 ### Tests for User Story 5
 
-- [ ] T062 [P] [US5] BDD step defs for Scenario 7 (role-gated column visible only to correct role) in `backend/tests/integration/test_scenario7_role_gate.py`
+- [X] T062 [P] [US5] BDD step defs for Scenario 7 (role-gated column visible only to correct role) in `backend/tests/integration/test_scenario7_role_gate.py`
 
 ### Implementation for User Story 5
 
-- [ ] T063 [US5] `role_gate` enforcement branch in the enforcement node, checked against the caller's role from the auth stub, honoring the column's `on_role_mismatch` setting (`reject` by default, `exclude` if explicitly configured; FR-008) in `backend/src/services/enforcement/enforcer.py` (depends on T048)
-- [ ] T064 [US5] Finalize the `diagnosis_code` gated-role config (`roles: [admin]`, per spec.md Scenario 7 as corrected on 2026-07-23) in `policies/healthcare/<version>/policy.yaml` (depends on T044)
+- [X] T063 [US5] `role_gate` enforcement branch in the enforcement node, checked against the caller's role from the auth stub, honoring the column's `on_role_mismatch` setting (`reject` by default, `exclude` if explicitly configured; FR-008) in `backend/src/services/enforcement/enforcer.py` (depends on T048)
+- [X] T064 [US5] Finalize the `diagnosis_code` gated-role config (`roles: [admin]`, per spec.md Scenario 7 as corrected on 2026-07-23) in `policies/healthcare/<version>/policy.yaml` (depends on T044)
 
 **Checkpoint**: All 5 user stories independently functional — all 11 `spec.md` scenarios have a corresponding passing test.
 
@@ -247,14 +249,14 @@ excluded, per FR-008 configuration) for a caller without the required role
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T065 [P] Update `README.md` with setup + quickstart pointers
-- [ ] T066 GitHub Actions CI: run the full `pytest-bdd` suite + `classifier_eval.py` on every PR, failing eval blocks merge (Constitution Principle VI) in `.github/workflows/ci.yml` (depends on T006, T030, T015-T017, T031, T041-T042, T053-T054, T057a, T052a, T058, T062)
-- [ ] T067 [P] Cross-domain regression check: assert zero domain-specific conditionals in engine source (FR-011, Success Criteria) in `backend/tests/unit/test_no_domain_conditionals.py`
-- [ ] T068 [P] NFR-001 timing test: 50-table schema classifies end-to-end in under 5 minutes in `backend/tests/integration/test_nfr001_classification_latency.py`
-- [ ] T069 [P] NFR-002 latency test: enforcement check adds ≤200ms per query in `backend/tests/integration/test_nfr002_enforcement_latency.py`
-- [ ] T070 [P] Security test: assert the masking utility never emits raw sample values into an LLM prompt (FR-003, Principle I) in `backend/tests/unit/test_masking_no_raw_values.py`
-- [ ] T071 Run `quickstart.md` validation end-to-end (including Scenarios 9, 10, and the `GET /audit-log` walkthrough) and record results
-- [ ] T072 [P] Synthetic-data safeguard test: assert `domains/healthcare/seed.py` and `domains/fintech/seed.py` only construct data via the checked-in Synthea/Faker generators and never read a non-local or externally-supplied connection string (FR-012, Constitution Principle VII) in `backend/tests/unit/test_synthetic_data_only.py`
+- [X] T065 [P] Update `README.md` with setup + quickstart pointers
+- [X] T066 GitHub Actions CI: run the full `pytest-bdd` suite + `classifier_eval.py` on every PR, failing eval blocks merge (Constitution Principle VI) in `.github/workflows/ci.yml` (depends on T006, T030, T015-T017, T031, T041-T042, T053-T054, T057a, T052a, T044a, T058, T062)
+- [X] T067 [P] Cross-domain regression check: assert zero domain-specific conditionals in engine source (FR-011, Success Criteria) in `backend/tests/unit/test_no_domain_conditionals.py`
+- [X] T068 [P] NFR-001 timing test: 50-table schema classifies end-to-end in under 5 minutes in `backend/tests/integration/test_nfr001_classification_latency.py`
+- [X] T069 [P] NFR-002 latency test: p95 enforcement-check latency ≤200ms, measured over single-query/no-concurrent-load runs (spec.md NFR-002) in `backend/tests/integration/test_nfr002_enforcement_latency.py`
+- [X] T070 [P] Security test: assert the masking utility never emits raw sample values into an LLM prompt (FR-003, Principle I) in `backend/tests/unit/test_masking_no_raw_values.py`
+- [X] T071 Run `quickstart.md` validation end-to-end (including Scenarios 9, 10, and the `GET /audit-log` walkthrough) and record results
+- [X] T072 [P] Synthetic-data safeguard test: assert `domains/healthcare/seed.py` and `domains/fintech/seed.py` only construct data via the checked-in Python-native Synthea-style/Faker generators and never read a non-local or externally-supplied connection string (FR-012, Constitution Principle VII) in `backend/tests/unit/test_synthetic_data_only.py`
 
 ---
 
@@ -349,5 +351,185 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   since-corrected spec inconsistency.
 - T072 was added in a `/speckit.analyze` follow-up pass on 2026-07-23: FR-012
   (synthetic-data-only) previously had no dedicated regression safeguard task.
+- T012 (2026-07-29): `domains/healthcare/seed.py` uses a Python-native
+  Synthea-style generator, not the actual Synthea tool — this environment
+  has no JVM. `tech-stack.md`, `research.md` §10, and `plan.md` were
+  amended accordingly; T072's description was updated to match.
+- T013 (2026-07-29): added a `claims` table (`member_ssn`, `tenant_id`,
+  `claim_amount`) to the fintech schema, beyond `research.md` §10's
+  original `accounts`/`transactions`/`customers` set, to match
+  `quickstart.md`'s Scenario 4/5 examples. `research.md` §10 was updated
+  accordingly.
+- T015/T017 (2026-07-29): writing these BDD tests surfaced a contract gap
+  — neither `/review-queue` (pending-only) nor `/policy` (published,
+  no confidence) can answer "what did the pipeline decide for this
+  column, right now." Added `GET /domains/{domain}/classifications`
+  (`contracts/api.md`) and task T027a to implement it; T032
+  (`/review-queue`) now explicitly depends on T027a as a filtered view
+  of the same store rather than a separate one.
+- **Resolved 2026-07-30** (was: open gap for T044/T045): `ColumnClassification`
+  has no `action` field (data-model.md) — `PolicyColumn.action` is derived
+  from `classification` at publish time via a pure, deterministic
+  two-outcome function: `business` → `allow`, every other classification
+  (`pii_direct`, `pii_indirect`, `sensitive_category`) → `block`
+  (fail-closed default). `role_gate` is never auto-derived in Milestone 1;
+  it's only ever a manual, post-publish override (see T064 for
+  `diagnosis_code`). See spec.md Amendments, 2026-07-30.
+- **Resolved 2026-07-30 (T056)** (was: open gap for T050/T056): `query_graph.py`
+  now catches `QuestionNotMappedError` in `generate_node`, storing a
+  synthetic `EnforcementResult` with the new `Decision.QUESTION_NOT_MAPPED`
+  value (audit_log.py, added alongside `POLICY_PUBLISHED` for the same
+  reason: neither `allow` nor `block` fit). A conditional edge routes
+  straight to `audit`, skipping `enforce`/`execute` entirely — no SQL is
+  ever generated or run, and the audit-completeness rule (FR-010) still
+  gets its one entry (`raw_query_hash=None`, `policy_version_used=None`,
+  since neither SQL nor a policy version is ever resolved for this
+  outcome). `POST /query` (T051) no longer needs its interim
+  `except QuestionNotMappedError` handling; it now branches on
+  `result.decision == Decision.QUESTION_NOT_MAPPED` like any other
+  decision. Verified end-to-end with a mocked-Postgres smoke test
+  confirming the audit write actually happens. See spec.md Amendments,
+  2026-07-30.
+- **Still open**: `sql_proposal.py`'s `propose_sql` (T049) matches a
+  question's tokens against known table/column names only — FR-014 also
+  calls for matching against "a policy-configured synonym list," but no
+  synonym field exists anywhere in `PolicyArtifact`/
+  `policy-artifact.schema.yaml` (data-model.md). This is a conservative
+  gap (more questions look unmapped, never fewer — never an
+  over-match/security issue), not a correctness bug, but the schema
+  extension needed to close it hasn't been designed.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.
 - Avoid: same-file conflicts within a `[P]` batch, and any engine code path that branches on domain name (Constitution Principle IV, checked by T067).
+- **T061 (2026-07-31)**: `policies/fintech/1/policy.yaml` + `manifest.yaml`
+  are now checked into git — no fintech policy existed yet (only
+  `policies/fintech/.gitkeep`) when this task ran, and no live Postgres
+  was available in-session to classify/approve/publish for real. Built via
+  `PolicyStore.publish()` (the same code path `POST /policy/publish` (T045)
+  uses) from `eval/ground_truth/fintech.csv`'s hand-labeled classifications
+  — the project's own authoritative "correct, fully human-reviewed" target
+  for this schema — rather than hand-writing YAML to match the schema by
+  guesswork. `claims.row_policy_template` is set to
+  `"tenant_id = :current_tenant"` per this task; `role_gate` (T064,
+  healthcare) is unaffected. This also closes a `quickstart.md` gap:
+  Scenarios 4–6's fintech steps already assumed an active fintech policy
+  existed without ever showing a fintech publish call — a fresh
+  `docker compose up` now has one from git, matching that assumption. A
+  real classify/approve/publish run against fintech remains possible and
+  will simply advance to version 2 (`PolicyStore.publish()`'s manifest
+  pointer only ever moves forward), superseding this seed version.
+- **T063 (2026-07-31)**: `on_role_mismatch: exclude` support (new
+  `backend/src/services/enforcement/role_gate.py`) only recognizes the
+  gated column as excludable when it's a bare, unaliased-table reference
+  directly in the query's own top-level `SELECT` list — never inside an
+  aggregate/function (spec.md already required this), never via
+  `SELECT *` (this function doesn't track wildcard-expansion positions),
+  and never when it's referenced only in a `WHERE`/`JOIN` clause without
+  being selected at all. All three fall back to `reject`. One additional
+  rule spec.md doesn't explicitly state: if excluding every `exclude`-
+  eligible column in a query would leave zero projections (e.g. `SELECT
+  diagnosis_code FROM patients` with only that one gated column), those
+  columns fall back to `reject` too rather than the enforcer emitting
+  unexecutable `SELECT FROM patients` — a narrow, conservative
+  interpretation of FR-008's "allowing the rest of the query to proceed"
+  wording (there has to be a "rest").
+- **T064 (2026-07-31)**: same situation and same fix as T061 — no
+  healthcare policy existed yet (only `policies/healthcare/.gitkeep`), no
+  live Postgres was available in-session, so `policies/healthcare/1/
+  policy.yaml` + `manifest.yaml` were built via `PolicyStore.publish()`
+  from `eval/ground_truth/healthcare.csv`'s hand-labeled classifications
+  and checked into git. `patients.diagnosis_code` was then hand-edited
+  from its ground-truth-derived `block` to `action: role_gate, roles:
+  [admin]` (default `on_role_mismatch: reject`), per Scenario 7 as
+  corrected 2026-07-23. A real classify/approve/publish run against
+  healthcare remains possible and will advance to version 2, superseding
+  this seed version — same caveat as T061.
+- **T066 (2026-07-31)**: `.github/workflows/ci.yml`'s `backend` job now
+  spins up two `postgres:16-alpine` service containers (healthcare on
+  host port 5432, fintech on 5433 — mirroring `docker-compose.yml`),
+  seeds both domains (`domains/<domain>/seed.py`, idempotent), then runs
+  `pytest tests/unit`, `pytest tests/integration` (the pytest-bdd
+  scenario suite), and `eval/classifier_eval.py` for both domains — the
+  eval script already exits non-zero on a gate failure, so no extra
+  merge-blocking logic was needed beyond letting the step fail normally.
+  DB credentials are read from repo secrets (`CI_DB_USER`,
+  `CI_DB_PASSWORD`, `CI_HEALTHCARE_DB_NAME`, `CI_FINTECH_DB_NAME`) rather
+  than hardcoded in the workflow file, per explicit user direction —
+  **these four secrets must be added under Settings > Secrets and
+  variables > Actions before this workflow will run successfully**; they
+  hold synthetic, CI-local-only values (never real credentials), but
+  Postgres will fail to start with an empty `POSTGRES_USER`/
+  `POSTGRES_PASSWORD` if they're unset. Verified: the YAML parses
+  (`python3 -c "import yaml; yaml.safe_load(...)"`), and the job's logic
+  was reasoned through against the existing codebase (upsert-based
+  classification persistence confirmed safe for the BDD suite's repeated
+  `POST /classify` calls against one shared database;
+  `classifier_eval.py` re-derives classifications in an in-memory
+  `_CollectingStore` and never reads persisted records, so BDD-suite
+  state has no effect on its precision/recall numbers) — but this
+  sandbox has no Docker/Postgres, so the workflow itself was never
+  executed end-to-end. Worth confirming on the first real PR.
+- **T068 (2026-07-31)**: the test uses an in-memory fake DB connection
+  and a near-instant stub LLM client (same pattern as
+  `test_classification_graph.py`), asserting the engine's own
+  per-column overhead alone clears a 30s bound — 1/10th of NFR-001's
+  300s budget — rather than timing a real Postgres + Anthropic API run,
+  which isn't reproducible deterministically in CI. **Flagging a real
+  risk surfaced while building this fixture, not fixed here**:
+  `llm_classify_node` (`backend/src/graph/classification_graph.py`)
+  `await`s `classify_with_llm` sequentially, one column at a time, and
+  the heuristic scorer (`heuristic_classifier.py`) only clears the
+  0.85 auto-approval threshold for columns matching a PII/PHI name
+  keyword — every other column (most non-PII operational columns: ids,
+  timestamps, status/amount fields, free text) scores 0.5–0.7 and falls
+  through to the LLM pass. For a realistic 50-table schema that's
+  plausibly 250-300+ sequential real LLM calls against the default
+  `claude-opus-4-8` model (`anthropic_client.py`); at even ~1s/call that
+  alone exceeds NFR-001's 300s budget. This test cannot catch that
+  because it stubs LLM latency to ~0 (see above). Worth a follow-up
+  task — e.g. bounded concurrent LLM dispatch — before trusting NFR-001
+  against a real 50-table schema; raised to the user in-session rather
+  than silently fixed, since it's an architecture change beyond "add a
+  timing test."
+- **T071 (2026-08-03)**: ran `quickstart.md` end-to-end against the
+  docker-compose stack (no `ANTHROPIC_API_KEY` configured — the no-key
+  `NullLLMClient` fallback path). All 11 manual steps and the automated
+  validation section pass. Two real `quickstart.md` gaps found and fixed
+  in the doc itself while running it (both are documentation-only; no
+  engine behavior changed):
+  1. Step 6's `{"question": "show me all claims"}` example can never
+     succeed as written: `claims` always has ≥1 non-`business` column
+     (`member_ssn` at minimum), so the token-matcher's `SELECT *`
+     fallback always hits a blocked column before row-policy injection
+     is even reached. Replaced with a `sql` example selecting only
+     `business`-classified columns (mirroring
+     `test_scenario5_row_policy.py`'s approach) plus a companion
+     `row_policy_template` setup snippet — `/policy/publish` never
+     auto-derives `row_policy_template` any more than it does
+     `role_gate` (api/policy.py's own docstring already says this for
+     `role_gate`; the same is true for `row_policy_template`, just not
+     previously called out in `quickstart.md`), and a live
+     classify/approve/publish run had reset the fintech policy to only
+     `member_ssn` classified — a stale/incomplete artifact left over
+     from before all `claims` columns were approved, not a publish bug.
+  2. The "Automated validation" section's `pytest tests/integration
+     --bdd` doesn't work: `pytest` has no `--bdd` flag (pytest-bdd
+     scenarios collect automatically via each module's `scenarios(...)`
+     call), and the command needs to run from `backend/` with its
+     `.venv` plus `HEALTHCARE_DATABASE_URL`/`FINTECH_DATABASE_URL`
+     pointed at the docker-compose Postgres instances' *host*-mapped
+     ports (`localhost:5432`/`localhost:5433`), not the in-container
+     hostnames `.env` provides. Fixed to a working command block.
+  Also hit (not a doc bug, just a step to remember): the backend
+  container runs as root, so files from a `/policy/publish` call are
+  root-owned on the host — `sudo chown` needs a terminal for password
+  entry, which isn't available in a non-interactive shell; ownership was
+  reclaimed instead via a throwaway `docker run --rm -v
+  "$(pwd)/policies:/policies" alpine chown -R $(id -u):$(id -g)
+  /policies`, a viable substitute wherever passwordless `sudo`/an
+  interactive terminal isn't available. Results: all 16 BDD scenarios
+  pass (`pytest tests/integration -q` — 10 from spec.md plus edge cases
+  for Scenarios 5/7/8/11); `classifier_eval.py`'s required gate
+  (`pii_direct` precision/recall ≥ 0.85) passes both domains
+  (healthcare: 1.00/1.00; fintech: 1.00/1.00) — other classifications
+  (`sensitive_category`, `business`) score lower under the no-key
+  fallback, expected and out of gate scope per spec Success Criteria.

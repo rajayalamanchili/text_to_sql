@@ -1,0 +1,271 @@
+domain: healthcare
+version: 8
+tables:
+- table_name: audit_log
+  columns:
+    actor_role:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    decision:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    domain:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    policy_version_used:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    query_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    raw_query_hash:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    reason_code:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    reason_message:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    timestamp:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+  row_policy_template: null
+- table_name: column_classifications
+  columns:
+    cardinality_ratio:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    classification:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    column_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    confidence:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    data_type:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    domain:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    heuristic_score:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    llm_rationale:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    llm_score:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    reviewed_at:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    reviewed_by:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    source:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    status:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    table_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+  row_policy_template: null
+- table_name: conditions
+  columns:
+    condition_code:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    condition_description:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    condition_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    encounter_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    onset_date:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    patient_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+  row_policy_template: null
+- table_name: encounters
+  columns:
+    encounter_class:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    encounter_date:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    encounter_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    patient_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    provider_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    reason_description:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+  row_policy_template: null
+- table_name: patients
+  columns:
+    address:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+    birth_date:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    city:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    diagnosis_code:
+      action: role_gate
+      roles:
+      - admin
+      on_role_mismatch: reject
+      classification: sensitive_category
+    first_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    gender:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    last_name:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    marital_status:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    patient_id:
+      action: allow
+      roles: []
+      on_role_mismatch: reject
+      classification: business
+    patient_notes:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    patient_ssn:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_direct
+    state:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: sensitive_category
+    zip:
+      action: block
+      roles: []
+      on_role_mismatch: reject
+      classification: pii_indirect
+  row_policy_template: null
+approved_by: admin
+approved_at: '2026-08-03T09:13:12.763560Z'

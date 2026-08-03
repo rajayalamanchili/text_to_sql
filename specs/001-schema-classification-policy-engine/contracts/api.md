@@ -13,6 +13,7 @@ Milestone-1-configured domains (FR-011). All endpoints require the
 | Header | Values | Behavior if missing/invalid |
 |---|---|---|
 | `X-Steward-Role` | `analyst`, `admin` | Defaults to `analyst` (fail closed) |
+| `X-Steward-Tenant` | any non-empty string | Only required for queries touching a table whose `row_policy_template` references `:current_tenant`; if absent/malformed for such a table, the query is rejected with `reason_code: ENFORCEMENT_ERROR` (spec.md FR-008, Scenario 5) |
 
 ## Schema enumeration & classification pipeline
 
@@ -33,6 +34,21 @@ all columns from scratch rather than incrementally patching.
 
 **Constraints**: MUST complete within 5 minutes for a 50-table schema
 (NFR-001).
+
+### `GET /domains/{domain}/classifications`
+Lists `ColumnClassification` records for the domain, in **any** status
+(`auto_approved`, `pending_review`, `approved`, `rejected`) — added
+2026-07-29 to close a gap the BDD test suite (Scenarios 1, 3) surfaced:
+neither `/review-queue` (pending-only) nor `/policy` (published, no
+confidence/status) can answer "what did the pipeline decide for this
+specific column, right now, whatever its status." `/review-queue` is a
+`status == "pending_review"`-filtered view of this same underlying data,
+not a separate store.
+
+**Query params**: `table` and `column` (both optional) narrow to a single
+column; omit both to list every classified column in the domain.
+
+**Response 200**: `{ items: [ColumnClassification] }`
 
 ## Human review queue (FR-013)
 

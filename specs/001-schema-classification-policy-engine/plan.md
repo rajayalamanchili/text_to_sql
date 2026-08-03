@@ -65,7 +65,7 @@ the classifier eval; 2 roles (`analyst`, `admin`) via auth stub.
 | IV | One Engine, Many Policies | PASS | Domain-specific data lives entirely in `policies/<domain>/` YAML and `domains/<domain>/` config+seed scripts; engine source (`backend/src/`) has no `if domain == "healthcare"` branches — verified by FR-011's explicit test. |
 | V | Spec Before Code | PASS | This plan follows an approved, clarified `spec.md`; `tasks.md` (next command) will not be generated until this plan is complete. |
 | VI | Evaluation Is a Merge Gate | PASS (planned) | CI (GitHub Actions, per `tech-stack.md`) runs `pytest-bdd` scenario suite + classifier precision/recall script on every PR; both are part of this milestone's Definition of Done, not follow-up work. |
-| VII | Synthetic Data, Honest Claims | PASS | Healthcare data from Synthea, fintech from Faker/PaySim-style generation (FR-012); no real data path exists anywhere in `domains/`. |
+| VII | Synthetic Data, Honest Claims | PASS | Healthcare data from a Python-native Synthea-style generator (amended 2026-07-29 — see tech-stack.md), fintech from Faker/PaySim-style generation (FR-012); no real data path exists anywhere in `domains/`. |
 | VIII | Observability and Auditability by Default | PASS | Every classification and enforcement decision writes to the `audit_log` Postgres table via `structlog`-emitted structured events (FR-010, NFR-004); see data-model.md. |
 | IX | Bounded Autonomy | N/A | No agentic retry/tool-use loop exists in Milestone 1 — the LLM-assisted classification pass (FR-003) is a single bounded call per column, not a loop. Revisit at Milestone 3. |
 | X | Milestones Are Sequential | PASS | This is Milestone 1; no Milestone 2+ capability (RAG, agentic loop, MCP) appears in this plan's scope or structure. |
@@ -119,6 +119,35 @@ added in `tasks.md` (T057a, T052a) — tracked as **CRITICAL** findings C1–C3
 in the 2026-07-24 `/speckit.analyze` report until that coverage existed;
 that coverage is now in place.
 
+**Post-Clarify Re-check (2026-07-27)**: `/speckit.clarify` added four more
+requirements to `spec.md`: FR-008's `X-Steward-Tenant` header for
+`current_tenant` resolution (fail-closed `ENFORCEMENT_ERROR` if
+absent/malformed), FR-008's fail-closed rule for a `role_gate`/`exclude`
+column referenced only inside an aggregate expression, FR-007's
+policy-version-pinning guarantee for in-flight queries, and NFR-002's
+measurement methodology (p95, single query, no load) plus its
+runtime-timeout posture (a measured SLO, not a request-path cutoff). None
+of these introduce a new architectural component, an LLM call in the
+enforcement path, or an unbounded loop — they extend the existing auth
+stub (research.md §7), enforcement node, and manifest-based version
+resolution (research.md §6) already described in this plan. All ten
+principles above still hold; Principle I/II are strengthened (tenant
+resolution now has an explicit fail-closed path rather than an undefined
+one). A follow-on `/speckit.analyze` pass found the tenant-header and
+version-pinning requirements had zero task coverage (findings G1, G2,
+tracked as CRITICAL/HIGH) — `tasks.md` T010, T044a, T058, and T059 were
+updated/added to close them.
+
+**Implementation Note (2026-07-29, T012)**: `tech-stack.md`'s "Healthcare
+synthetic data" row was amended from "Synthea" to a Python-native
+Synthea-style generator (`Faker` + curated ICD-10-style diagnosis-code and
+clinical-note pools), since this project's dev/CI environment has no JVM
+and running the real Synthea tool would add an undocumented Java
+toolchain dependency purely for seed data. `research.md` §10 was updated
+to match. This does not change any principle's PASS status above — data
+remains fully synthetic (Principle VII), and no engine code path branches
+on which generator produced a domain's data (Principle IV).
+
 ## Project Structure
 
 ### Documentation (this feature)
@@ -146,16 +175,19 @@ backend/
 │   │   └── enforcement/     # sqlglot-based column check + row-predicate injection
 │   ├── graph/              # LangGraph definitions: classification_graph.py, query_graph.py
 │   └── api/                # FastAPI routers: schema, review_queue, policy, query, audit
-├── policies/               # versioned YAML policy artifacts, one dir per domain
-│   ├── healthcare/
-│   └── fintech/
-├── domains/                # domain config + synthetic data generation (no engine logic)
-│   ├── healthcare/          # Synthea-derived schema.sql + seed script
-│   └── fintech/             # Faker/PaySim-style schema.sql + seed script
 └── tests/
     ├── contract/            # API contract tests
     ├── integration/          # pytest-bdd step defs for the 11 spec.md scenarios
     └── unit/                 # heuristic classifier, confidence combination, sqlglot enforcement
+
+policies/                  # versioned YAML policy artifacts, one dir per domain (repo root,
+├── healthcare/            # not nested under backend/ — a diffable-via-PR governance
+└── fintech/                # artifact per tech-stack.md, referenced without a backend/
+                             # prefix throughout tasks.md/research.md §6/contracts/)
+
+domains/                   # domain config + synthetic data generation (no engine logic)
+├── healthcare/             # Synthea-style schema.sql + Python-native seed script
+└── fintech/                # Faker/PaySim-style schema.sql + seed script
 
 frontend/
 ├── src/
