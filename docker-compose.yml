@@ -71,6 +71,12 @@ services:
       HEALTHCARE_DATABASE_URL: postgresql://${HEALTHCARE_DB_USER}:${HEALTHCARE_DB_PASSWORD}@healthcare-db:5432/${HEALTHCARE_DB_NAME}
       FINTECH_DATABASE_URL: postgresql://${FINTECH_DB_USER}:${FINTECH_DB_PASSWORD}@fintech-db:5432/${FINTECH_DB_NAME}
       STEWARD_CORS_ALLOWED_ORIGINS: ${STEWARD_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      # Optional (tech-stack.md: Anthropic primary/OpenAI secondary,
+      # provider-agnostic): unset falls back to `NullLLMClient`
+      # (anthropic_client.py) — every column stays at its heuristic score,
+      # so most non-keyword-matched columns land in pending_review instead
+      # of auto-approving via the LLM-assisted pass (quickstart.md step 1).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8000:8000"
     volumes:

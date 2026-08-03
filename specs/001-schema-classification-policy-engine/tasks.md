@@ -255,7 +255,7 @@ excluded, per FR-008 configuration) for a caller without the required role
 - [X] T068 [P] NFR-001 timing test: 50-table schema classifies end-to-end in under 5 minutes in `backend/tests/integration/test_nfr001_classification_latency.py`
 - [X] T069 [P] NFR-002 latency test: p95 enforcement-check latency ≤200ms, measured over single-query/no-concurrent-load runs (spec.md NFR-002) in `backend/tests/integration/test_nfr002_enforcement_latency.py`
 - [X] T070 [P] Security test: assert the masking utility never emits raw sample values into an LLM prompt (FR-003, Principle I) in `backend/tests/unit/test_masking_no_raw_values.py`
-- [ ] T071 Run `quickstart.md` validation end-to-end (including Scenarios 9, 10, and the `GET /audit-log` walkthrough) and record results
+- [X] T071 Run `quickstart.md` validation end-to-end (including Scenarios 9, 10, and the `GET /audit-log` walkthrough) and record results
 - [X] T072 [P] Synthetic-data safeguard test: assert `domains/healthcare/seed.py` and `domains/fintech/seed.py` only construct data via the checked-in Python-native Synthea-style/Faker generators and never read a non-local or externally-supplied connection string (FR-012, Constitution Principle VII) in `backend/tests/unit/test_synthetic_data_only.py`
 
 ---
@@ -490,3 +490,46 @@ Task: "Value-pattern masking utility in backend/src/services/classification/mask
   against a real 50-table schema; raised to the user in-session rather
   than silently fixed, since it's an architecture change beyond "add a
   timing test."
+- **T071 (2026-08-03)**: ran `quickstart.md` end-to-end against the
+  docker-compose stack (no `ANTHROPIC_API_KEY` configured — the no-key
+  `NullLLMClient` fallback path). All 11 manual steps and the automated
+  validation section pass. Two real `quickstart.md` gaps found and fixed
+  in the doc itself while running it (both are documentation-only; no
+  engine behavior changed):
+  1. Step 6's `{"question": "show me all claims"}` example can never
+     succeed as written: `claims` always has ≥1 non-`business` column
+     (`member_ssn` at minimum), so the token-matcher's `SELECT *`
+     fallback always hits a blocked column before row-policy injection
+     is even reached. Replaced with a `sql` example selecting only
+     `business`-classified columns (mirroring
+     `test_scenario5_row_policy.py`'s approach) plus a companion
+     `row_policy_template` setup snippet — `/policy/publish` never
+     auto-derives `row_policy_template` any more than it does
+     `role_gate` (api/policy.py's own docstring already says this for
+     `role_gate`; the same is true for `row_policy_template`, just not
+     previously called out in `quickstart.md`), and a live
+     classify/approve/publish run had reset the fintech policy to only
+     `member_ssn` classified — a stale/incomplete artifact left over
+     from before all `claims` columns were approved, not a publish bug.
+  2. The "Automated validation" section's `pytest tests/integration
+     --bdd` doesn't work: `pytest` has no `--bdd` flag (pytest-bdd
+     scenarios collect automatically via each module's `scenarios(...)`
+     call), and the command needs to run from `backend/` with its
+     `.venv` plus `HEALTHCARE_DATABASE_URL`/`FINTECH_DATABASE_URL`
+     pointed at the docker-compose Postgres instances' *host*-mapped
+     ports (`localhost:5432`/`localhost:5433`), not the in-container
+     hostnames `.env` provides. Fixed to a working command block.
+  Also hit (not a doc bug, just a step to remember): the backend
+  container runs as root, so files from a `/policy/publish` call are
+  root-owned on the host — `sudo chown` needs a terminal for password
+  entry, which isn't available in a non-interactive shell; ownership was
+  reclaimed instead via a throwaway `docker run --rm -v
+  "$(pwd)/policies:/policies" alpine chown -R $(id -u):$(id -g)
+  /policies`, a viable substitute wherever passwordless `sudo`/an
+  interactive terminal isn't available. Results: all 16 BDD scenarios
+  pass (`pytest tests/integration -q` — 10 from spec.md plus edge cases
+  for Scenarios 5/7/8/11); `classifier_eval.py`'s required gate
+  (`pii_direct` precision/recall ≥ 0.85) passes both domains
+  (healthcare: 1.00/1.00; fintech: 1.00/1.00) — other classifications
+  (`sensitive_category`, `business`) score lower under the no-key
+  fallback, expected and out of gate scope per spec Success Criteria.
